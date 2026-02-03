@@ -125,6 +125,22 @@ const paymentSchema = new mongoose.Schema({
   metadata: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
+  },
+  
+  // Atributos SQS para notificaciones
+  sqsAttributes: {
+    allow_commerce_pan_token: {
+      type: String,
+      default: 'true'
+    },
+    from_batch: {
+      type: String,
+      default: 'false'
+    },
+    is_force: {
+      type: String,
+      default: 'false'
+    }
   }
 }, {
   timestamps: true // Agrega createdAt y updatedAt automáticamente
