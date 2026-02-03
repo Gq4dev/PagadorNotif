@@ -77,13 +77,23 @@ const paymentSchema = new mongoose.Schema({
     lastFourDigits: {
       type: String,
       default: null
+    },
+    token: {
+      type: String,
+      default: null
+    },
+    tokenId: {
+      type: String,
+      default: null
+    },
+    panToken: {
+      type: String,
+      default: null
+    },
+    commerceToken: {
+      type: String,
+      default: null
     }
-  },
-  
-  // PAN Token ficticio (tokenizado del número de tarjeta)
-  panToken: {
-    type: String,
-    default: null
   },
   
   // Estado del pago

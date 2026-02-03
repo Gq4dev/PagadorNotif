@@ -2,10 +2,22 @@ const { v4: uuidv4 } = require('uuid');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const Payment = require('../models/Payment');
 
-// Generar PAN token ficticio (formato: pan_tok_XXXX-XXXX-XXXX)
+// Generar tokens ficticios para el método de pago
 const generateFictitiousPanToken = (brand = 'card') => {
   const segment = () => Math.random().toString(36).substring(2, 6).toUpperCase();
   return `pan_tok_${brand}_${segment()}-${segment()}-${segment()}`;
+};
+
+const generateFictitiousToken = () => {
+  return `tok_${uuidv4().replace(/-/g, '').substring(0, 24)}`;
+};
+
+const generateFictitiousTokenId = () => {
+  return uuidv4();
+};
+
+const generateFictitiousCommerceToken = () => {
+  return `com_${uuidv4().replace(/-/g, '').substring(0, 20)}`;
 };
 
 // URL de la cola SQS (se usa para Lambda y SQS)
@@ -95,10 +107,22 @@ const sendNotification = async (payment) => {
       is_force: 'false'
     };
 
-    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes (panToken solo en Mongo)
+    // paymentMethod completo para que viaje a AWS
+    const paymentMethodPayload = {
+      type: payment.paymentMethod?.type || 'credit_card',
+      brand: payment.paymentMethod?.brand || null,
+      lastFourDigits: payment.paymentMethod?.lastFourDigits || null,
+      token: payment.paymentMethod?.token || null,
+      tokenId: payment.paymentMethod?.tokenId || null,
+      panToken: payment.paymentMethod?.panToken || null,
+      commerceToken: payment.paymentMethod?.commerceToken || null
+    };
+
+    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes, paymentMethod
     const payload = {
       QueueUrl: QUEUE_URL,
       MessageBody: paymentId,
+      paymentMethod: paymentMethodPayload,
       MessageAttributes: {
         allow_commerce_pan_token: {
           DataType: 'String',
@@ -243,8 +267,14 @@ exports.createPayment = async (req, res) => {
     // Generar ID de transacción único
     const transactionId = `TXN-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
     
-    // Generar PAN token ficticio
-    const panToken = generateFictitiousPanToken(paymentMethod?.brand || 'card');
+    // Generar tokens ficticios y armar paymentMethod completo
+    const paymentMethodWithTokens = {
+      ...paymentMethod,
+      token: generateFictitiousToken(),
+      tokenId: generateFictitiousTokenId(),
+      panToken: generateFictitiousPanToken(paymentMethod?.brand || 'card'),
+      commerceToken: generateFictitiousCommerceToken()
+    };
     
     // Simular procesamiento del pago
     const processingResult = simulatePaymentProcessing(amount, paymentMethod);
@@ -256,8 +286,7 @@ exports.createPayment = async (req, res) => {
       amount,
       currency: currency || 'ARS',
       payer,
-      paymentMethod,
-      panToken,
+      paymentMethod: paymentMethodWithTokens,
       status: processingResult.status,
       responseCode: processingResult.responseCode,
       responseMessage: processingResult.responseMessage,
@@ -295,7 +324,7 @@ exports.createPayment = async (req, res) => {
           id: payment.merchant.id,
           name: payment.merchant.name
         },
-        panToken: payment.panToken,
+        paymentMethod: payment.paymentMethod,
         createdAt: payment.createdAt,
         notificationSent: notificationResult?.success || false
       }
