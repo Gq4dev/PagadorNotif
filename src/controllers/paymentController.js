@@ -2,23 +2,28 @@ const { v4: uuidv4 } = require('uuid');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const Payment = require('../models/Payment');
 
-// URL del servicio de notificaciones AWS Lambda
-const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';
+// URL de la cola SQS (se usa para Lambda y SQS)
+const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL;
+
+// Extraer región de la URL de SQS si está disponible, sino usar us-east-1 por defecto
+const getRegionFromUrl = (url) => {
+  if (!url) return 'us-east-1';
+  const match = url.match(/sqs\.([^.]+)\.amazonaws\.com/);
+  return match ? match[1] : 'us-east-1';
+};
 
 // Configuración de AWS SQS
 // El SDK de AWS automáticamente detecta credenciales desde:
 // - Variables de entorno (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
 // - Archivos de credenciales (~/.aws/credentials)
 // - Roles IAM (en EC2, Lambda, ECS, etc.)
-const sqsClient = new SQSClient({
-  region: process.env.AWS_REGION || 'us-east-1'
-});
-
-const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL || 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';
+const sqsClient = QUEUE_URL ? new SQSClient({
+  region: getRegionFromUrl(QUEUE_URL)
+}) : null;
 
 // Función para enviar mensaje a SQS con atributos
 const sendToSQS = async (payment) => {
-  if (!QUEUE_URL) {
+  if (!QUEUE_URL || !sqsClient) {
     console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a SQS');
     return { success: false, error: 'Queue URL no configurada' };
   }
@@ -71,7 +76,12 @@ const sendNotification = async (payment) => {
   const paymentId = payment._id.toString();
   
   try {
-    // 1. Enviar a Lambda
+    // 1. Enviar a Lambda usando AWS_SQS_QUEUE_URL
+    if (!QUEUE_URL) {
+      console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a Lambda');
+      return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
+    }
+
     const payload = {
       message: `Nuevo pago: ${paymentId}`,
       payment_id: paymentId,
@@ -80,7 +90,7 @@ const sendNotification = async (payment) => {
 
     console.log(`Enviando notificación para pago ${payment.transactionId}...`);
 
-    const lambdaResponse = await fetch(NOTIFICATION_SERVICE_URL, {
+    const lambdaResponse = await fetch(QUEUE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
