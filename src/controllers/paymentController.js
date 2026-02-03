@@ -340,6 +340,125 @@ exports.createPayment = async (req, res) => {
   }
 };
 
+// Datos ficticios para bulk test
+const BULK_MERCHANTS = [
+  { id: 'MERCHANT-001', name: 'Tienda Online Demo', email: 'pagos@demo.com' },
+  { id: 'MERCHANT-002', name: 'Comercio Test', email: 'test@comercio.com' },
+  { id: 'MERCHANT-003', name: 'Shop Pagador', email: 'shop@pagador.com' }
+];
+
+const BULK_PAYER_NAMES = ['Juan Pérez', 'María García', 'Carlos López', 'Ana Martínez', 'Luis Rodríguez', 'Laura Sánchez', 'Pedro Fernández', 'Sofía Díaz'];
+
+const BULK_AMOUNTS_APPROVED = [1000, 2500, 5000, 7500, 15000, 20000, 3500, 8900]; // terminan en 00 o dan alta prob aprobación
+const BULK_AMOUNTS_REJECTED = [1999, 3599, 5099]; // terminan en 99
+
+// Crear 25 pagos de prueba y enviar notificaciones a AWS
+exports.createBulkTestPayments = async (req, res) => {
+  const count = parseInt(req.query.count) || 25;
+  const maxCount = Math.min(Math.max(1, count), 100);
+
+  try {
+    const results = { created: 0, approved: 0, rejected: 0, notificationsSent: 0, errors: [] };
+    const createdPayments = [];
+
+    for (let i = 0; i < maxCount; i++) {
+      try {
+        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
+        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
+        const useRejected = i % 5 === 4; // 1 de cada 5 con monto rechazado
+        const amount = useRejected
+          ? BULK_AMOUNTS_REJECTED[i % BULK_AMOUNTS_REJECTED.length]
+          : BULK_AMOUNTS_APPROVED[i % BULK_AMOUNTS_APPROVED.length];
+
+        const paymentMethod = {
+          type: 'credit_card',
+          brand: ['visa', 'mastercard'][i % 2],
+          lastFourDigits: String(1000 + (i % 9000))
+        };
+
+        const paymentMethodWithTokens = {
+          ...paymentMethod,
+          token: generateFictitiousToken(),
+          tokenId: generateFictitiousTokenId(),
+          panToken: generateFictitiousPanToken(paymentMethod.brand),
+          commerceToken: generateFictitiousCommerceToken()
+        };
+
+        const transactionId = `TXN-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
+        const processingResult = simulatePaymentProcessing(amount, paymentMethod);
+
+        const payment = new Payment({
+          transactionId,
+          merchant: {
+            ...merchant,
+            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
+          },
+          amount,
+          currency: 'ARS',
+          payer: {
+            name: payerName,
+            email: `payer${i + 1}@test.com`,
+            documentType: 'DNI',
+            documentNumber: String(20000000 + i)
+          },
+          paymentMethod: paymentMethodWithTokens,
+          status: processingResult.status,
+          responseCode: processingResult.responseCode,
+          responseMessage: processingResult.responseMessage,
+          externalReference: `BULK-${Date.now()}-${i + 1}`,
+          description: `Pago de prueba bulk #${i + 1}`,
+          sqsAttributes: {
+            allow_commerce_pan_token: 'true',
+            from_batch: 'true',
+            is_force: 'false'
+          }
+        });
+
+        await payment.save();
+        results.created++;
+        if (payment.status === 'approved') results.approved++;
+        else results.rejected++;
+
+        if (payment.status === 'approved') {
+          const notif = await sendNotification(payment);
+          if (notif.success) results.notificationsSent++;
+        }
+
+        createdPayments.push({
+          transactionId: payment.transactionId,
+          status: payment.status,
+          amount: payment.amount,
+          notificationSent: payment.status === 'approved'
+        });
+      } catch (err) {
+        results.errors.push({ index: i + 1, message: err.message });
+      }
+    }
+
+    console.log(`Bulk test: ${results.created} pagos creados, ${results.approved} aprobados, ${results.notificationsSent} notificaciones enviadas a AWS`);
+
+    res.status(201).json({
+      success: true,
+      message: `Se crearon ${results.created} pagos de prueba. ${results.notificationsSent} notificaciones enviadas a AWS.`,
+      data: {
+        total: results.created,
+        approved: results.approved,
+        rejected: results.rejected,
+        notificationsSent: results.notificationsSent,
+        payments: createdPayments,
+        errors: results.errors.length ? results.errors : undefined
+      }
+    });
+  } catch (error) {
+    console.error('Error en bulk test:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos de prueba',
+      message: error.message
+    });
+  }
+};
+
 // Obtener un pago por transactionId
 exports.getPayment = async (req, res) => {
   try {

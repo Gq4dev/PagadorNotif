@@ -71,3 +71,16 @@ export const refundPayment = async (transactionId) => {
   
   return response.json()
 }
+
+export const createBulkTestPayments = async (count = 25) => {
+  const response = await fetch(`${API_URL}/payments/bulk/test?count=${count}`, {
+    method: 'POST'
+  })
+  
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.error || err.message || 'Error al crear pagos de prueba')
+  }
+  
+  return response.json()
+}

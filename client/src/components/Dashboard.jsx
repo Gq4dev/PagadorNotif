@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPayments } from '../services/api'
+import { getPayments, createBulkTestPayments } from '../services/api'
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -12,6 +12,9 @@ function Dashboard() {
   })
   const [recentPayments, setRecentPayments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResult, setBulkResult] = useState(null)
+  const [bulkError, setBulkError] = useState(null)
 
   useEffect(() => {
     fetchDashboardData()
@@ -61,6 +64,21 @@ function Dashboard() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  const runBulkTest = async () => {
+    setBulkLoading(true)
+    setBulkError(null)
+    setBulkResult(null)
+    try {
+      const res = await createBulkTestPayments(25)
+      setBulkResult(res.data)
+      fetchDashboardData()
+    } catch (err) {
+      setBulkError(err.message)
+    } finally {
+      setBulkLoading(false)
+    }
   }
 
   const getStatusBadge = (status) => {
@@ -144,6 +162,39 @@ function Dashboard() {
             {stats.total > 0 ? (stats.approved / stats.total * 100).toFixed(1) : 0}%
           </span>
         </div>
+      </div>
+
+      {/* Tarea: Enviar 25 pagos de prueba a AWS */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 className="card-title">
+          <span>🧪</span> Probar servicio AWS
+        </h3>
+        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Crea 25 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={runBulkTest}
+          disabled={bulkLoading}
+        >
+          {bulkLoading ? (
+            <>
+              <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
+              Creando 25 pagos...
+            </>
+          ) : (
+            <>📤 Enviar 25 pagos de prueba a AWS</>
+          )}
+        </button>
+        {bulkError && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkError}</p>
+        )}
+        {bulkResult && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
+            <strong>✅ Resultado:</strong> {bulkResult.total} pagos creados · {bulkResult.approved} aprobados · {bulkResult.rejected} rechazados · <strong>{bulkResult.notificationsSent} notificaciones enviadas a AWS</strong>
+          </div>
+        )}
       </div>
 
       {/* Recent Transactions */}

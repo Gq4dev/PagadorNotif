@@ -11,6 +11,9 @@ router.get('/', paymentController.listPayments);
 // Obtener pagos pendientes de notificación (para Lambda/SQS)
 router.get('/pending-notifications', paymentController.getPendingNotifications);
 
+// Crear N pagos de prueba y enviar notificaciones a AWS (default 25)
+router.post('/bulk/test', paymentController.createBulkTestPayments);
+
 // Obtener un pago específico
 router.get('/:transactionId', paymentController.getPayment);
 
