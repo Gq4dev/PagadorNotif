@@ -6,12 +6,12 @@ const Payment = require('../models/Payment');
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';
 
 // Configuración de AWS SQS
+// El SDK de AWS automáticamente detecta credenciales desde:
+// - Variables de entorno (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+// - Archivos de credenciales (~/.aws/credentials)
+// - Roles IAM (en EC2, Lambda, ECS, etc.)
 const sqsClient = new SQSClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  } : undefined
+  region: process.env.AWS_REGION || 'us-east-1'
 });
 
 const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL || 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';

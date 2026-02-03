@@ -12,11 +12,7 @@ services:
       - key: NOTIFICATION_SERVICE_URL
         value: https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications
       - key: AWS_REGION
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
+        value: us-east-1
       - key: AWS_SQS_QUEUE_URL
         value: https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications
     healthCheckPath: /health
