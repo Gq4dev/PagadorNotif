@@ -82,13 +82,34 @@ const sendNotification = async (payment) => {
       return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
     }
 
-    const payload = {
-      message: `Nuevo pago: ${paymentId}`,
-      payment_id: paymentId,
-      status: payment.status
+    // Atributos SQS del pago (los que el usuario elige en la UI)
+    const sqsAttributes = payment.sqsAttributes || {
+      allow_commerce_pan_token: 'true',
+      from_batch: 'false',
+      is_force: 'false'
     };
 
-    console.log(`Enviando notificación para pago ${payment.transactionId}...`);
+    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes
+    const payload = {
+      QueueUrl: QUEUE_URL,
+      MessageBody: paymentId,
+      MessageAttributes: {
+        allow_commerce_pan_token: {
+          DataType: 'String',
+          StringValue: sqsAttributes.allow_commerce_pan_token || 'true'
+        },
+        from_batch: {
+          DataType: 'String',
+          StringValue: sqsAttributes.from_batch || 'false'
+        },
+        is_force: {
+          DataType: 'String',
+          StringValue: sqsAttributes.is_force || 'false'
+        }
+      }
+    };
+
+    console.log(`Enviando notificación para pago ${payment.transactionId}...`, payload);
 
     const lambdaResponse = await fetch(QUEUE_URL, {
       method: 'POST',
@@ -98,27 +119,13 @@ const sendNotification = async (payment) => {
       body: JSON.stringify(payload)
     });
 
-    // 2. Enviar a SQS (solo si el pago fue aprobado) con los atributos configurados
-    let sqsResult = null;
-    if (payment.status === 'approved') {
-      sqsResult = await sendToSQS(payment);
-    }
-
-    // Marcar como notificado solo si ambas operaciones fueron exitosas o al menos Lambda fue exitosa
     if (lambdaResponse.ok) {
       await Payment.findByIdAndUpdate(payment._id, {
         notificationSent: true,
         notificationSentAt: new Date()
       });
       console.log(`Notificación enviada exitosamente para pago ${payment.transactionId}`);
-      
-      if (sqsResult && sqsResult.success) {
-        console.log(`Mensaje SQS enviado exitosamente para pago ${payment.transactionId}`);
-      } else if (sqsResult && !sqsResult.success) {
-        console.warn(`Advertencia: No se pudo enviar a SQS pero Lambda fue exitoso: ${sqsResult.error}`);
-      }
-      
-      return { success: true, sqsSuccess: sqsResult?.success || false };
+      return { success: true };
     } else {
       const errorText = await lambdaResponse.text();
       console.error(`Error al enviar notificación a Lambda: ${lambdaResponse.status} - ${errorText}`);
@@ -279,8 +286,7 @@ exports.createPayment = async (req, res) => {
           name: payment.merchant.name
         },
         createdAt: payment.createdAt,
-        notificationSent: notificationResult?.success || false,
-        sqsSent: notificationResult?.sqsSuccess || false
+        notificationSent: notificationResult?.success || false
       }
     });
     
