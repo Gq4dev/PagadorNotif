@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "cd client && npm install && npm run build",
-    "postinstall": "npm run build"
+    "build": "cd client && npm install && npm run build && cd ..",
+    "build:client": "cd client && NODE_ENV=development npm install && npm run build"
   },
   "keywords": [
     "payment",

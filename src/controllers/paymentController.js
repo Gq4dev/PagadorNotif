@@ -2,7 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const Payment = require('../models/Payment');
 
 // URL del servicio de notificaciones AWS Lambda
-const NOTIFICATION_SERVICE_URL = 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications';
 
 // Función para enviar notificación al servicio AWS Lambda
 const sendNotification = async (payment) => {
