@@ -459,6 +459,119 @@ exports.createBulkTestPayments = async (req, res) => {
   }
 };
 
+// Montos que siempre se aprueban (terminan en 00)
+const BULK_AMOUNTS_ALWAYS_APPROVED = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 25000, 4000, 8000];
+
+// Crear N pagos todos aprobados, algunos con panToken y otros sin
+exports.createBulkTestPaymentsApproved = async (req, res) => {
+  const count = parseInt(req.query.count) || 50;
+  const maxCount = Math.min(Math.max(1, count), 100);
+
+  try {
+    const results = { created: 0, withPanToken: 0, withoutPanToken: 0, notificationsSent: 0, errors: [] };
+    const createdPayments = [];
+
+    for (let i = 0; i < maxCount; i++) {
+      try {
+        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
+        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
+        const amount = BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length];
+        const withPanToken = i % 2 === 0; // mitad con panToken, mitad sin
+
+        const paymentMethodBase = {
+          type: 'credit_card',
+          brand: ['visa', 'mastercard'][i % 2],
+          lastFourDigits: String(1000 + (i % 9000))
+        };
+
+        const paymentMethodWithTokens = withPanToken
+          ? {
+              ...paymentMethodBase,
+              token: generateFictitiousToken(),
+              tokenId: generateFictitiousTokenId(),
+              panToken: generateFictitiousPanToken(paymentMethodBase.brand),
+              commerceToken: generateFictitiousCommerceToken()
+            }
+          : {
+              ...paymentMethodBase,
+              token: null,
+              tokenId: null,
+              panToken: null,
+              commerceToken: null
+            };
+
+        const transactionId = `TXN-APP-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
+
+        const payment = new Payment({
+          transactionId,
+          merchant: {
+            ...merchant,
+            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
+          },
+          amount,
+          currency: 'ARS',
+          payer: {
+            name: payerName,
+            email: `approved${i + 1}@test.com`,
+            documentType: 'DNI',
+            documentNumber: String(30000000 + i)
+          },
+          paymentMethod: paymentMethodWithTokens,
+          status: 'approved',
+          responseCode: '00',
+          responseMessage: 'Transacción aprobada',
+          externalReference: `BULK-APP-${Date.now()}-${i + 1}`,
+          description: `Pago aprobado prueba #${i + 1}${withPanToken ? ' (con panToken)' : ' (sin panToken)'}`,
+          sqsAttributes: {
+            allow_commerce_pan_token: withPanToken ? 'true' : 'false',
+            from_batch: 'true',
+            is_force: 'false'
+          }
+        });
+
+        await payment.save();
+        results.created++;
+        if (withPanToken) results.withPanToken++;
+        else results.withoutPanToken++;
+
+        const notif = await sendNotification(payment);
+        if (notif.success) results.notificationsSent++;
+
+        createdPayments.push({
+          transactionId: payment.transactionId,
+          amount: payment.amount,
+          withPanToken,
+          notificationSent: notif.success
+        });
+      } catch (err) {
+        results.errors.push({ index: i + 1, message: err.message });
+      }
+    }
+
+    console.log(`Bulk approved: ${results.created} pagos (${results.withPanToken} con panToken, ${results.withoutPanToken} sin), ${results.notificationsSent} notificaciones a AWS`);
+
+    res.status(201).json({
+      success: true,
+      message: `Se crearon ${results.created} pagos aprobados. ${results.withPanToken} con panToken, ${results.withoutPanToken} sin. ${results.notificationsSent} notificaciones enviadas a AWS.`,
+      data: {
+        total: results.created,
+        withPanToken: results.withPanToken,
+        withoutPanToken: results.withoutPanToken,
+        notificationsSent: results.notificationsSent,
+        payments: createdPayments,
+        errors: results.errors.length ? results.errors : undefined
+      }
+    });
+  } catch (error) {
+    console.error('Error en bulk test approved:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos de prueba aprobados',
+      message: error.message
+    });
+  }
+};
+
 // Obtener un pago por transactionId
 exports.getPayment = async (req, res) => {
   try {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPayments, createBulkTestPayments } from '../services/api'
+import { getPayments, createBulkTestPayments, createBulkTestPaymentsApproved } from '../services/api'
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -15,6 +15,9 @@ function Dashboard() {
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
   const [bulkError, setBulkError] = useState(null)
+  const [bulkApprovedLoading, setBulkApprovedLoading] = useState(false)
+  const [bulkApprovedResult, setBulkApprovedResult] = useState(null)
+  const [bulkApprovedError, setBulkApprovedError] = useState(null)
 
   useEffect(() => {
     fetchDashboardData()
@@ -78,6 +81,21 @@ function Dashboard() {
       setBulkError(err.message)
     } finally {
       setBulkLoading(false)
+    }
+  }
+
+  const runBulkTestApproved = async () => {
+    setBulkApprovedLoading(true)
+    setBulkApprovedError(null)
+    setBulkApprovedResult(null)
+    try {
+      const res = await createBulkTestPaymentsApproved(50)
+      setBulkApprovedResult(res.data)
+      fetchDashboardData()
+    } catch (err) {
+      setBulkApprovedError(err.message)
+    } finally {
+      setBulkApprovedLoading(false)
     }
   }
 
@@ -193,6 +211,39 @@ function Dashboard() {
         {bulkResult && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
             <strong>✅ Resultado:</strong> {bulkResult.total} pagos creados · {bulkResult.approved} aprobados · {bulkResult.rejected} rechazados · <strong>{bulkResult.notificationsSent} notificaciones enviadas a AWS</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Tarea: 50 pagos todos aprobados, algunos con panToken otros sin */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 className="card-title">
+          <span>✅</span> 50 pagos aprobados (con y sin panToken)
+        </h3>
+        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Crea 50 pagos todos aprobados. La mitad con token/panToken/commerceToken y la mitad sin. Todos envían notificación a AWS.
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={runBulkTestApproved}
+          disabled={bulkApprovedLoading}
+        >
+          {bulkApprovedLoading ? (
+            <>
+              <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
+              Creando 50 pagos aprobados...
+            </>
+          ) : (
+            <>📤 Enviar 50 pagos aprobados a AWS</>
+          )}
+        </button>
+        {bulkApprovedError && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkApprovedError}</p>
+        )}
+        {bulkApprovedResult && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
+            <strong>✅ Resultado:</strong> {bulkApprovedResult.total} pagos creados · <strong>{bulkApprovedResult.withPanToken} con panToken</strong> · {bulkApprovedResult.withoutPanToken} sin panToken · <strong>{bulkApprovedResult.notificationsSent} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>

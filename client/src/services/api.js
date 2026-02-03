@@ -84,3 +84,16 @@ export const createBulkTestPayments = async (count = 25) => {
   
   return response.json()
 }
+
+export const createBulkTestPaymentsApproved = async (count = 50) => {
+  const response = await fetch(`${API_URL}/payments/bulk/test-approved?count=${count}`, {
+    method: 'POST'
+  })
+  
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.error || err.message || 'Error al crear pagos aprobados')
+  }
+  
+  return response.json()
+}
