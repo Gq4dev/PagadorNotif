@@ -80,6 +80,12 @@ const paymentSchema = new mongoose.Schema({
     }
   },
   
+  // PAN Token ficticio (tokenizado del número de tarjeta)
+  panToken: {
+    type: String,
+    default: null
+  },
+  
   // Estado del pago
   status: {
     type: String,

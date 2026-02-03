@@ -370,6 +370,11 @@ function PaymentForm({ onSuccess }) {
                 <div className="result-transaction">
                   {result.transactionId}
                 </div>
+                {result.panToken && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--gray-600)', marginTop: '0.5rem' }}>
+                    PAN Token: <code>{result.panToken}</code>
+                  </p>
+                )}
                 <div className="result-amount">
                   {formatCurrency(result.amount, result.currency)}
                 </div>

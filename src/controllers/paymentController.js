@@ -2,6 +2,12 @@ const { v4: uuidv4 } = require('uuid');
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const Payment = require('../models/Payment');
 
+// Generar PAN token ficticio (formato: pan_tok_XXXX-XXXX-XXXX)
+const generateFictitiousPanToken = (brand = 'card') => {
+  const segment = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `pan_tok_${brand}_${segment()}-${segment()}-${segment()}`;
+};
+
 // URL de la cola SQS (se usa para Lambda y SQS)
 const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL;
 
@@ -89,7 +95,7 @@ const sendNotification = async (payment) => {
       is_force: 'false'
     };
 
-    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes
+    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes (panToken solo en Mongo)
     const payload = {
       QueueUrl: QUEUE_URL,
       MessageBody: paymentId,
@@ -237,6 +243,9 @@ exports.createPayment = async (req, res) => {
     // Generar ID de transacción único
     const transactionId = `TXN-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
     
+    // Generar PAN token ficticio
+    const panToken = generateFictitiousPanToken(paymentMethod?.brand || 'card');
+    
     // Simular procesamiento del pago
     const processingResult = simulatePaymentProcessing(amount, paymentMethod);
     
@@ -248,6 +257,7 @@ exports.createPayment = async (req, res) => {
       currency: currency || 'ARS',
       payer,
       paymentMethod,
+      panToken,
       status: processingResult.status,
       responseCode: processingResult.responseCode,
       responseMessage: processingResult.responseMessage,
@@ -285,6 +295,7 @@ exports.createPayment = async (req, res) => {
           id: payment.merchant.id,
           name: payment.merchant.name
         },
+        panToken: payment.panToken,
         createdAt: payment.createdAt,
         notificationSent: notificationResult?.success || false
       }
