@@ -77,7 +77,7 @@ function Dashboard() {
     setBulk1000Error(null)
     setBulk1000Result(null)
     try {
-      const res = await createBulkTestPayments(1000)
+      const res = await createBulkTestPayments(1000, true, true) // allApproved=true, withoutPanToken=true
       setBulk1000Result(res.data)
       fetchDashboardData()
     } catch (err) {
@@ -92,7 +92,7 @@ function Dashboard() {
     setBulk5000Error(null)
     setBulk5000Result(null)
     try {
-      const res = await createBulkTestPayments(5000)
+      const res = await createBulkTestPayments(5000, true, true) // allApproved=true, withoutPanToken=true
       setBulk5000Result(res.data)
       fetchDashboardData()
     } catch (err) {
@@ -206,7 +206,7 @@ function Dashboard() {
           <span>🧪</span> Probar servicio AWS - 1000 pagos
         </h3>
         <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          Crea 1000 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
+          Crea 1000 pagos todos aprobados sin panToken. Todos envían notificación a AWS (Lambda/SQS).
         </p>
         <button
           type="button"
@@ -239,7 +239,7 @@ function Dashboard() {
           <span>🚀</span> Probar servicio AWS - 5000 pagos
         </h3>
         <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          Crea 5000 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
+          Crea 5000 pagos todos aprobados sin panToken. Todos envían notificación a AWS (Lambda/SQS).
         </p>
         <button
           type="button"

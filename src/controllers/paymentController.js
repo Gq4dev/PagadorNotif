@@ -351,10 +351,14 @@ const BULK_PAYER_NAMES = ['Juan Pérez', 'María García', 'Carlos López', 'Ana
 
 const BULK_AMOUNTS_APPROVED = [1000, 2500, 5000, 7500, 15000, 20000, 3500, 8900]; // terminan en 00 o dan alta prob aprobación
 const BULK_AMOUNTS_REJECTED = [1999, 3599, 5099]; // terminan en 99
+// Montos que siempre se aprueban (terminan en 00)
+const BULK_AMOUNTS_ALWAYS_APPROVED = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 25000, 4000, 8000];
 
 // Crear N pagos de prueba y enviar notificaciones a AWS
 exports.createBulkTestPayments = async (req, res) => {
   const count = parseInt(req.query.count) || 1000;
+  const allApproved = req.query.allApproved === 'true';
+  const withoutPanToken = req.query.withoutPanToken === 'true';
   const maxCount = Math.min(Math.max(1, count), 10000);
 
   try {
@@ -365,10 +369,13 @@ exports.createBulkTestPayments = async (req, res) => {
       try {
         const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
         const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
-        const useRejected = i % 5 === 4; // 1 de cada 5 con monto rechazado
-        const amount = useRejected
-          ? BULK_AMOUNTS_REJECTED[i % BULK_AMOUNTS_REJECTED.length]
-          : BULK_AMOUNTS_APPROVED[i % BULK_AMOUNTS_APPROVED.length];
+        
+        // Si allApproved=true, usar montos que siempre aprueban, sino usar lógica normal
+        const amount = allApproved
+          ? BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length]
+          : (i % 5 === 4
+              ? BULK_AMOUNTS_REJECTED[i % BULK_AMOUNTS_REJECTED.length]
+              : BULK_AMOUNTS_APPROVED[i % BULK_AMOUNTS_APPROVED.length]);
 
         const paymentMethod = {
           type: 'credit_card',
@@ -376,16 +383,29 @@ exports.createBulkTestPayments = async (req, res) => {
           lastFourDigits: String(1000 + (i % 9000))
         };
 
-        const paymentMethodWithTokens = {
-          ...paymentMethod,
-          token: generateFictitiousToken(),
-          tokenId: generateFictitiousTokenId(),
-          panToken: generateFictitiousPanToken(paymentMethod.brand),
-          commerceToken: generateFictitiousCommerceToken()
-        };
+        // Si withoutPanToken=true, no generar tokens
+        const paymentMethodWithTokens = withoutPanToken
+          ? {
+              ...paymentMethod,
+              token: null,
+              tokenId: null,
+              panToken: null,
+              commerceToken: null
+            }
+          : {
+              ...paymentMethod,
+              token: generateFictitiousToken(),
+              tokenId: generateFictitiousTokenId(),
+              panToken: generateFictitiousPanToken(paymentMethod.brand),
+              commerceToken: generateFictitiousCommerceToken()
+            };
 
         const transactionId = `TXN-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
-        const processingResult = simulatePaymentProcessing(amount, paymentMethod);
+        
+        // Si allApproved=true, forzar aprobación
+        const processingResult = allApproved
+          ? { status: 'approved', responseCode: '00', responseMessage: 'Transacción aprobada' }
+          : simulatePaymentProcessing(amount, paymentMethod);
 
         const payment = new Payment({
           transactionId,
@@ -406,9 +426,9 @@ exports.createBulkTestPayments = async (req, res) => {
           responseCode: processingResult.responseCode,
           responseMessage: processingResult.responseMessage,
           externalReference: `BULK-${Date.now()}-${i + 1}`,
-          description: `Pago de prueba bulk #${i + 1}`,
+          description: `Pago de prueba bulk #${i + 1}${allApproved ? ' (aprobado)' : ''}${withoutPanToken ? ' (sin panToken)' : ''}`,
           sqsAttributes: {
-            allow_commerce_pan_token: 'true',
+            allow_commerce_pan_token: withoutPanToken ? 'false' : 'true',
             from_batch: 'true',
             is_force: 'false'
           }

@@ -72,8 +72,12 @@ export const refundPayment = async (transactionId) => {
   return response.json()
 }
 
-export const createBulkTestPayments = async (count = 1000) => {
-  const response = await fetch(`${API_URL}/payments/bulk/test?count=${count}`, {
+export const createBulkTestPayments = async (count = 1000, allApproved = false, withoutPanToken = false) => {
+  const params = new URLSearchParams({ count: count.toString() })
+  if (allApproved) params.append('allApproved', 'true')
+  if (withoutPanToken) params.append('withoutPanToken', 'true')
+  
+  const response = await fetch(`${API_URL}/payments/bulk/test?${params}`, {
     method: 'POST'
   })
   
