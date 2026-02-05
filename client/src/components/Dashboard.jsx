@@ -12,9 +12,12 @@ function Dashboard() {
   })
   const [recentPayments, setRecentPayments] = useState([])
   const [loading, setLoading] = useState(true)
-  const [bulkLoading, setBulkLoading] = useState(false)
-  const [bulkResult, setBulkResult] = useState(null)
-  const [bulkError, setBulkError] = useState(null)
+  const [bulk1000Loading, setBulk1000Loading] = useState(false)
+  const [bulk1000Result, setBulk1000Result] = useState(null)
+  const [bulk1000Error, setBulk1000Error] = useState(null)
+  const [bulk5000Loading, setBulk5000Loading] = useState(false)
+  const [bulk5000Result, setBulk5000Result] = useState(null)
+  const [bulk5000Error, setBulk5000Error] = useState(null)
   const [bulkApprovedLoading, setBulkApprovedLoading] = useState(false)
   const [bulkApprovedResult, setBulkApprovedResult] = useState(null)
   const [bulkApprovedError, setBulkApprovedError] = useState(null)
@@ -69,18 +72,33 @@ function Dashboard() {
     })
   }
 
-  const runBulkTest = async (count = 1000) => {
-    setBulkLoading(true)
-    setBulkError(null)
-    setBulkResult(null)
+  const runBulkTest1000 = async () => {
+    setBulk1000Loading(true)
+    setBulk1000Error(null)
+    setBulk1000Result(null)
     try {
-      const res = await createBulkTestPayments(count)
-      setBulkResult(res.data)
+      const res = await createBulkTestPayments(1000)
+      setBulk1000Result(res.data)
       fetchDashboardData()
     } catch (err) {
-      setBulkError(err.message)
+      setBulk1000Error(err.message)
     } finally {
-      setBulkLoading(false)
+      setBulk1000Loading(false)
+    }
+  }
+
+  const runBulkTest5000 = async () => {
+    setBulk5000Loading(true)
+    setBulk5000Error(null)
+    setBulk5000Result(null)
+    try {
+      const res = await createBulkTestPayments(5000)
+      setBulk5000Result(res.data)
+      fetchDashboardData()
+    } catch (err) {
+      setBulk5000Error(err.message)
+    } finally {
+      setBulk5000Loading(false)
     }
   }
 
@@ -193,10 +211,10 @@ function Dashboard() {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => runBulkTest(1000)}
-          disabled={bulkLoading}
+          onClick={runBulkTest1000}
+          disabled={bulk1000Loading}
         >
-          {bulkLoading ? (
+          {bulk1000Loading ? (
             <>
               <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
               Creando 1000 pagos...
@@ -205,12 +223,12 @@ function Dashboard() {
             <>📤 Enviar 1000 pagos de prueba a AWS</>
           )}
         </button>
-        {bulkError && (
-          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkError}</p>
+        {bulk1000Error && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulk1000Error}</p>
         )}
-        {bulkResult && (
+        {bulk1000Result && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulkResult.total} pagos creados · {bulkResult.approved} aprobados · {bulkResult.rejected} rechazados · <strong>{bulkResult.notificationsSent} notificaciones enviadas a AWS</strong>
+            <strong>✅ Resultado:</strong> {bulk1000Result.total} pagos creados · {bulk1000Result.approved} aprobados · {bulk1000Result.rejected} rechazados · <strong>{bulk1000Result.notificationsSent} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>
@@ -226,10 +244,10 @@ function Dashboard() {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => runBulkTest(5000)}
-          disabled={bulkLoading}
+          onClick={runBulkTest5000}
+          disabled={bulk5000Loading}
         >
-          {bulkLoading ? (
+          {bulk5000Loading ? (
             <>
               <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
               Creando 5000 pagos...
@@ -238,12 +256,12 @@ function Dashboard() {
             <>📤 Enviar 5000 pagos de prueba a AWS</>
           )}
         </button>
-        {bulkError && (
-          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkError}</p>
+        {bulk5000Error && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulk5000Error}</p>
         )}
-        {bulkResult && (
+        {bulk5000Result && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulkResult.total} pagos creados · {bulkResult.approved} aprobados · {bulkResult.rejected} rechazados · <strong>{bulkResult.notificationsSent} notificaciones enviadas a AWS</strong>
+            <strong>✅ Resultado:</strong> {bulk5000Result.total} pagos creados · {bulk5000Result.approved} aprobados · {bulk5000Result.rejected} rechazados · <strong>{bulk5000Result.notificationsSent} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>
