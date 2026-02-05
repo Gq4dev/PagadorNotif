@@ -172,7 +172,8 @@ const simulatePaymentProcessing = (amount, paymentMethod) => {
   // Reglas de simulación:
   // - Montos terminados en 00: siempre aprobado
   // - Montos terminados en 99: siempre rechazado
-  // - Resto: 85% aprobado, 15% rechazado
+  // - Montos terminados en 50: siempre pending
+  // - Resto: 80% aprobado, 15% rechazado, 5% pending
   
   const amountStr = amount.toString();
   
@@ -192,31 +193,34 @@ const simulatePaymentProcessing = (amount, paymentMethod) => {
     };
   }
   
-  // Simulación aleatoria para el resto
-  const isApproved = Math.random() < 0.85;
+  if (amountStr.endsWith('50')) {
+    return {
+      status: 'pending',
+      responseCode: '99',
+      responseMessage: 'Transacción en proceso'
+    };
+  }
   
-  if (isApproved) {
+  // Simulación aleatoria para el resto
+  const r = Math.random();
+  if (r < 0.80) {
     return {
       status: 'approved',
       responseCode: '00',
       responseMessage: 'Transacción aprobada'
     };
   }
-  
-  // Diferentes razones de rechazo
-  const rejectionReasons = [
-    { code: '51', message: 'Fondos insuficientes' },
-    { code: '54', message: 'Tarjeta expirada' },
-    { code: '57', message: 'Transacción no permitida' },
-    { code: '91', message: 'Banco emisor no disponible' }
-  ];
-  
-  const rejection = rejectionReasons[Math.floor(Math.random() * rejectionReasons.length)];
-  
+  if (r < 0.95) {
+    return {
+      status: 'rejected',
+      responseCode: '51',
+      responseMessage: 'Fondos insuficientes'
+    };
+  }
   return {
-    status: 'rejected',
-    responseCode: rejection.code,
-    responseMessage: rejection.message
+    status: 'pending',
+    responseCode: '99',
+    responseMessage: 'Transacción en proceso'
   };
 };
 
@@ -305,9 +309,9 @@ exports.createPayment = async (req, res) => {
     
     console.log(`Pago procesado: ${transactionId} - Estado: ${processingResult.status}`);
     
-    // Si el pago fue aprobado, enviar notificación al servicio AWS Lambda y SQS
+    // Enviar notificación a AWS para pagos aprobados y rechazados (no pending)
     let notificationResult = null;
-    if (payment.status === 'approved') {
+    if (payment.status === 'approved' || payment.status === 'rejected') {
       notificationResult = await sendNotification(payment);
     }
     
@@ -437,9 +441,10 @@ exports.createBulkTestPayments = async (req, res) => {
         await payment.save();
         results.created++;
         if (payment.status === 'approved') results.approved++;
-        else results.rejected++;
+        else if (payment.status === 'rejected') results.rejected++;
 
-        if (payment.status === 'approved') {
+        // Enviar notificación a AWS para aprobados y rechazados (no pending)
+        if (payment.status === 'approved' || payment.status === 'rejected') {
           const notif = await sendNotification(payment);
           if (notif.success) results.notificationsSent++;
         }
@@ -448,7 +453,7 @@ exports.createBulkTestPayments = async (req, res) => {
           transactionId: payment.transactionId,
           status: payment.status,
           amount: payment.amount,
-          notificationSent: payment.status === 'approved'
+          notificationSent: payment.status === 'approved' || payment.status === 'rejected'
         });
       } catch (err) {
         results.errors.push({ index: i + 1, message: err.message });
