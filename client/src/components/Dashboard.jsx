@@ -69,12 +69,12 @@ function Dashboard() {
     })
   }
 
-  const runBulkTest = async () => {
+  const runBulkTest = async (count = 1000) => {
     setBulkLoading(true)
     setBulkError(null)
     setBulkResult(null)
     try {
-      const res = await createBulkTestPayments(25)
+      const res = await createBulkTestPayments(count)
       setBulkResult(res.data)
       fetchDashboardData()
     } catch (err) {
@@ -182,27 +182,60 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Tarea: Enviar 25 pagos de prueba a AWS */}
+      {/* Tarea: Enviar 1000 pagos de prueba a AWS */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 className="card-title">
-          <span>🧪</span> Probar servicio AWS
+          <span>🧪</span> Probar servicio AWS - 1000 pagos
         </h3>
         <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          Crea 25 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
+          Crea 1000 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
         </p>
         <button
           type="button"
           className="btn btn-primary"
-          onClick={runBulkTest}
+          onClick={() => runBulkTest(1000)}
           disabled={bulkLoading}
         >
           {bulkLoading ? (
             <>
               <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
-              Creando 25 pagos...
+              Creando 1000 pagos...
             </>
           ) : (
-            <>📤 Enviar 25 pagos de prueba a AWS</>
+            <>📤 Enviar 1000 pagos de prueba a AWS</>
+          )}
+        </button>
+        {bulkError && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkError}</p>
+        )}
+        {bulkResult && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
+            <strong>✅ Resultado:</strong> {bulkResult.total} pagos creados · {bulkResult.approved} aprobados · {bulkResult.rejected} rechazados · <strong>{bulkResult.notificationsSent} notificaciones enviadas a AWS</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Tarea: Enviar 5000 pagos de prueba a AWS */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 className="card-title">
+          <span>🚀</span> Probar servicio AWS - 5000 pagos
+        </h3>
+        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Crea 5000 pagos de prueba de una vez. Los aprobados envían notificación a AWS (Lambda/SQS).
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => runBulkTest(5000)}
+          disabled={bulkLoading}
+        >
+          {bulkLoading ? (
+            <>
+              <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
+              Creando 5000 pagos...
+            </>
+          ) : (
+            <>📤 Enviar 5000 pagos de prueba a AWS</>
           )}
         </button>
         {bulkError && (

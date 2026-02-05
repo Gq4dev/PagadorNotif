@@ -72,7 +72,7 @@ export const refundPayment = async (transactionId) => {
   return response.json()
 }
 
-export const createBulkTestPayments = async (count = 25) => {
+export const createBulkTestPayments = async (count = 1000) => {
   const response = await fetch(`${API_URL}/payments/bulk/test?count=${count}`, {
     method: 'POST'
   })

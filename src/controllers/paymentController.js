@@ -352,10 +352,10 @@ const BULK_PAYER_NAMES = ['Juan Pérez', 'María García', 'Carlos López', 'Ana
 const BULK_AMOUNTS_APPROVED = [1000, 2500, 5000, 7500, 15000, 20000, 3500, 8900]; // terminan en 00 o dan alta prob aprobación
 const BULK_AMOUNTS_REJECTED = [1999, 3599, 5099]; // terminan en 99
 
-// Crear 25 pagos de prueba y enviar notificaciones a AWS
+// Crear N pagos de prueba y enviar notificaciones a AWS
 exports.createBulkTestPayments = async (req, res) => {
-  const count = parseInt(req.query.count) || 25;
-  const maxCount = Math.min(Math.max(1, count), 100);
+  const count = parseInt(req.query.count) || 1000;
+  const maxCount = Math.min(Math.max(1, count), 10000);
 
   try {
     const results = { created: 0, approved: 0, rejected: 0, notificationsSent: 0, errors: [] };
@@ -465,7 +465,7 @@ const BULK_AMOUNTS_ALWAYS_APPROVED = [1000, 2000, 3000, 5000, 7500, 10000, 15000
 // Crear N pagos todos aprobados, algunos con panToken y otros sin
 exports.createBulkTestPaymentsApproved = async (req, res) => {
   const count = parseInt(req.query.count) || 50;
-  const maxCount = Math.min(Math.max(1, count), 100);
+  const maxCount = Math.min(Math.max(1, count), 10000);
 
   try {
     const results = { created: 0, withPanToken: 0, withoutPanToken: 0, notificationsSent: 0, errors: [] };
