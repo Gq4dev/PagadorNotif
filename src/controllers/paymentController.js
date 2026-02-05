@@ -309,11 +309,9 @@ exports.createPayment = async (req, res) => {
     
     console.log(`Pago procesado: ${transactionId} - Estado: ${processingResult.status}`);
     
-    // Enviar notificación a AWS para pagos aprobados y rechazados (no pending)
+    // Enviar notificación a AWS para todos los estados (approved, rejected, pending)
     let notificationResult = null;
-    if (payment.status === 'approved' || payment.status === 'rejected') {
-      notificationResult = await sendNotification(payment);
-    }
+    notificationResult = await sendNotification(payment);
     
     res.status(201).json({
       success: true,
@@ -443,17 +441,15 @@ exports.createBulkTestPayments = async (req, res) => {
         if (payment.status === 'approved') results.approved++;
         else if (payment.status === 'rejected') results.rejected++;
 
-        // Enviar notificación a AWS para aprobados y rechazados (no pending)
-        if (payment.status === 'approved' || payment.status === 'rejected') {
-          const notif = await sendNotification(payment);
-          if (notif.success) results.notificationsSent++;
-        }
+        // Enviar notificación a AWS para todos (approved, rejected, pending)
+        const notif = await sendNotification(payment);
+        if (notif.success) results.notificationsSent++;
 
         createdPayments.push({
           transactionId: payment.transactionId,
           status: payment.status,
           amount: payment.amount,
-          notificationSent: payment.status === 'approved' || payment.status === 'rejected'
+          notificationSent: notif.success
         });
       } catch (err) {
         results.errors.push({ index: i + 1, message: err.message });
