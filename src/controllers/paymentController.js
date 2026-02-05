@@ -479,9 +479,6 @@ exports.createBulkTestPayments = async (req, res) => {
   }
 };
 
-// Montos que siempre se aprueban (terminan en 00)
-const BULK_AMOUNTS_ALWAYS_APPROVED = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 25000, 4000, 8000];
-
 // Crear N pagos todos aprobados, algunos con panToken y otros sin
 exports.createBulkTestPaymentsApproved = async (req, res) => {
   const count = parseInt(req.query.count) || 50;
