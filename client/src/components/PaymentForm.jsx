@@ -361,10 +361,13 @@ function PaymentForm({ onSuccess }) {
             ) : (
               <>
                 <div className="result-icon">
-                  {result.status === 'approved' ? '✅' : '❌'}
+                  {result.status === 'approved' ? '✅' : result.status === 'pending' ? '⏳' : '❌'}
                 </div>
-                <h3 className={`result-title ${result.status === 'approved' ? 'success' : 'error'}`}>
-                  {result.status === 'approved' ? 'Pago Aprobado' : 'Pago Rechazado'}
+                <h3 className={`result-title ${
+                  result.status === 'approved' ? 'success' :
+                  result.status === 'pending' ? 'pending' : 'error'
+                }`}>
+                  {result.status === 'approved' ? 'Pago Aprobado' : result.status === 'pending' ? 'En proceso' : 'Pago Rechazado'}
                 </h3>
                 <p className="result-message">{result.responseMessage}</p>
                 <div className="result-transaction">

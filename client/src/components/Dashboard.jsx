@@ -121,7 +121,7 @@ function Dashboard() {
     const statusConfig = {
       approved: { class: 'status-approved', icon: '✅', label: 'Aprobado' },
       rejected: { class: 'status-rejected', icon: '❌', label: 'Rechazado' },
-      pending: { class: 'status-pending', icon: '⏳', label: 'Pendiente' },
+      pending: { class: 'status-pending', icon: '⏳', label: 'En proceso' },
       refunded: { class: 'status-refunded', icon: '↩️', label: 'Reembolsado' }
     }
     const config = statusConfig[status] || statusConfig.pending

@@ -349,6 +349,10 @@ body {
   color: var(--success);
 }
 
+.result-title.pending {
+  color: var(--warning);
+}
+
 .result-title.error {
   color: var(--danger);
 }

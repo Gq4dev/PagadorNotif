@@ -64,7 +64,7 @@ function PaymentList() {
     const statusConfig = {
       approved: { class: 'status-approved', icon: '✅', label: 'Aprobado' },
       rejected: { class: 'status-rejected', icon: '❌', label: 'Rechazado' },
-      pending: { class: 'status-pending', icon: '⏳', label: 'Pendiente' },
+      pending: { class: 'status-pending', icon: '⏳', label: 'En proceso' },
       refunded: { class: 'status-refunded', icon: '↩️', label: 'Reembolsado' },
       cancelled: { class: 'status-refunded', icon: '🚫', label: 'Cancelado' }
     }
@@ -91,7 +91,7 @@ function PaymentList() {
           <option value="">Todos los estados</option>
           <option value="approved">Aprobados</option>
           <option value="rejected">Rechazados</option>
-          <option value="pending">Pendientes</option>
+          <option value="pending">En proceso</option>
           <option value="refunded">Reembolsados</option>
         </select>
         <input
