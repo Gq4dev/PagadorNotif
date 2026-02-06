@@ -167,6 +167,76 @@ const sendNotification = async (payment) => {
   }
 };
 
+// Función auxiliar para enviar notificación con atributos personalizados (para duplicados con is_force)
+const sendNotificationWithCustomAttributes = async (payment, customAttributes) => {
+  const paymentId = payment._id.toString();
+  
+  try {
+    if (!QUEUE_URL) {
+      console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a Lambda');
+      return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
+    }
+
+    const sqsAttributes = {
+      allow_commerce_pan_token: customAttributes?.allow_commerce_pan_token || payment.sqsAttributes?.allow_commerce_pan_token || 'true',
+      from_batch: customAttributes?.from_batch || payment.sqsAttributes?.from_batch || 'false',
+      is_force: customAttributes?.is_force || payment.sqsAttributes?.is_force || 'false'
+    };
+
+    const paymentMethodPayload = {
+      type: payment.paymentMethod?.type || 'credit_card',
+      brand: payment.paymentMethod?.brand || null,
+      lastFourDigits: payment.paymentMethod?.lastFourDigits || null,
+      token: payment.paymentMethod?.token || null,
+      tokenId: payment.paymentMethod?.tokenId || null,
+      panToken: payment.paymentMethod?.panToken || null,
+      commerceToken: payment.paymentMethod?.commerceToken || null
+    };
+
+    const payload = {
+      QueueUrl: QUEUE_URL,
+      MessageBody: paymentId,
+      paymentMethod: paymentMethodPayload,
+      MessageAttributes: {
+        allow_commerce_pan_token: {
+          DataType: 'String',
+          StringValue: sqsAttributes.allow_commerce_pan_token
+        },
+        from_batch: {
+          DataType: 'String',
+          StringValue: sqsAttributes.from_batch
+        },
+        is_force: {
+          DataType: 'String',
+          StringValue: sqsAttributes.is_force
+        }
+      }
+    };
+
+    console.log(`Enviando notificación con atributos personalizados para pago ${payment.transactionId}...`, payload);
+
+    const lambdaResponse = await fetch(QUEUE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (lambdaResponse.ok) {
+      console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.transactionId}`);
+      return { success: true };
+    } else {
+      const errorText = await lambdaResponse.text();
+      console.error(`Error al enviar notificación: ${lambdaResponse.status} - ${errorText}`);
+      return { success: false, error: errorText };
+    }
+  } catch (error) {
+    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 // Simular procesamiento de pago (genera resultado aleatorio o basado en reglas)
 const simulatePaymentProcessing = (amount, paymentMethod) => {
   // Reglas de simulación:
@@ -666,22 +736,37 @@ exports.createBulkTestWithDuplicates = async (req, res) => {
       }
     }
 
-    // Enviar notificación duplicada del 5to pago
+    // Enviar primera notificación duplicada del 5to pago (normal)
     if (duplicatePayment) {
-      console.log(`Enviando notificación DUPLICADA para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
+      console.log(`Enviando primera notificación DUPLICADA para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
       const duplicateNotif = await sendNotification(duplicatePayment);
       if (duplicateNotif.success) {
         results.notificationsSent++;
-        results.duplicates = 1;
-        console.log(`✅ Notificación duplicada enviada exitosamente`);
+        results.duplicates++;
+        console.log(`✅ Primera notificación duplicada enviada exitosamente`);
       }
     }
 
-    console.log(`Bulk con duplicados: ${results.created} pagos creados, ${results.notificationsSent} notificaciones enviadas (incluye 1 duplicado)`);
+    // Enviar segunda notificación duplicada del 5to pago con is_force: true
+    if (duplicatePayment) {
+      console.log(`Enviando segunda notificación DUPLICADA con is_force=true para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
+      const duplicateForceNotif = await sendNotificationWithCustomAttributes(duplicatePayment, {
+        allow_commerce_pan_token: 'false',
+        from_batch: 'true',
+        is_force: 'true'
+      });
+      if (duplicateForceNotif.success) {
+        results.notificationsSent++;
+        results.duplicates++;
+        console.log(`✅ Segunda notificación duplicada con is_force=true enviada exitosamente`);
+      }
+    }
+
+    console.log(`Bulk con duplicados: ${results.created} pagos creados, ${results.notificationsSent} notificaciones enviadas (incluye ${results.duplicates} duplicados)`);
 
     res.status(201).json({
       success: true,
-      message: `Se crearon ${results.created} pagos. ${results.notificationsSent} notificaciones enviadas a AWS (incluye ${results.duplicates} duplicado).`,
+      message: `Se crearon ${results.created} pagos. ${results.notificationsSent} notificaciones enviadas a AWS (incluye ${results.duplicates} duplicados: 1 normal + 1 con is_force=true).`,
       data: {
         total: results.created,
         notificationsSent: results.notificationsSent,

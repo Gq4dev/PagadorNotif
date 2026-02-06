@@ -323,7 +323,7 @@ function Dashboard() {
           <span>🔄</span> Prueba de duplicados - 10 pagos
         </h3>
         <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          Crea 10 pagos aprobados. El 5to pago se envía 2 veces a AWS (mismo payment_id) para probar manejo de duplicados.
+          Crea 10 pagos aprobados. El 5to pago se envía 2 veces a AWS (mismo payment_id): una normal y otra con <code>is_force: true</code>.
         </p>
         <button
           type="button"
@@ -345,7 +345,7 @@ function Dashboard() {
         )}
         {bulkDuplicatesResult && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulkDuplicatesResult.total} pagos creados · <strong>{bulkDuplicatesResult.notificationsSent} notificaciones enviadas</strong> (incluye {bulkDuplicatesResult.duplicates} duplicado) · Payment ID duplicado: <code style={{ fontSize: '0.8rem' }}>{bulkDuplicatesResult.duplicatePaymentId}</code>
+            <strong>✅ Resultado:</strong> {bulkDuplicatesResult.total} pagos creados · <strong>{bulkDuplicatesResult.notificationsSent} notificaciones enviadas</strong> (incluye {bulkDuplicatesResult.duplicates} duplicados: 1 normal + 1 con is_force=true) · Payment ID duplicado: <code style={{ fontSize: '0.8rem' }}>{bulkDuplicatesResult.duplicatePaymentId}</code>
           </div>
         )}
       </div>
