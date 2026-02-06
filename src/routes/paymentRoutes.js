@@ -17,6 +17,9 @@ router.post('/bulk/test', paymentController.createBulkTestPayments);
 // Crear N pagos todos aprobados, mitad con panToken mitad sin (default 50)
 router.post('/bulk/test-approved', paymentController.createBulkTestPaymentsApproved);
 
+// Crear 10 pagos con 2 notificaciones duplicadas (mismo payment_id)
+router.post('/bulk/test-duplicates', paymentController.createBulkTestWithDuplicates);
+
 // Obtener un pago específico
 router.get('/:transactionId', paymentController.getPayment);
 

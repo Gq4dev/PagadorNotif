@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPayments, createBulkTestPayments, createBulkTestPaymentsApproved } from '../services/api'
+import { getPayments, createBulkTestPayments, createBulkTestPaymentsApproved, createBulkTestWithDuplicates } from '../services/api'
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -21,6 +21,9 @@ function Dashboard() {
   const [bulkApprovedLoading, setBulkApprovedLoading] = useState(false)
   const [bulkApprovedResult, setBulkApprovedResult] = useState(null)
   const [bulkApprovedError, setBulkApprovedError] = useState(null)
+  const [bulkDuplicatesLoading, setBulkDuplicatesLoading] = useState(false)
+  const [bulkDuplicatesResult, setBulkDuplicatesResult] = useState(null)
+  const [bulkDuplicatesError, setBulkDuplicatesError] = useState(null)
 
   useEffect(() => {
     fetchDashboardData()
@@ -114,6 +117,21 @@ function Dashboard() {
       setBulkApprovedError(err.message)
     } finally {
       setBulkApprovedLoading(false)
+    }
+  }
+
+  const runBulkTestDuplicates = async () => {
+    setBulkDuplicatesLoading(true)
+    setBulkDuplicatesError(null)
+    setBulkDuplicatesResult(null)
+    try {
+      const res = await createBulkTestWithDuplicates()
+      setBulkDuplicatesResult(res.data)
+      fetchDashboardData()
+    } catch (err) {
+      setBulkDuplicatesError(err.message)
+    } finally {
+      setBulkDuplicatesLoading(false)
     }
   }
 
@@ -295,6 +313,39 @@ function Dashboard() {
         {bulkApprovedResult && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
             <strong>✅ Resultado:</strong> {bulkApprovedResult.total} pagos creados · <strong>{bulkApprovedResult.withPanToken} con panToken</strong> · {bulkApprovedResult.withoutPanToken} sin panToken · <strong>{bulkApprovedResult.notificationsSent} notificaciones enviadas a AWS</strong>
+          </div>
+        )}
+      </div>
+
+      {/* Tarea: 10 pagos con 2 notificaciones duplicadas */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 className="card-title">
+          <span>🔄</span> Prueba de duplicados - 10 pagos
+        </h3>
+        <p style={{ color: 'var(--gray-600)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+          Crea 10 pagos aprobados. El 5to pago se envía 2 veces a AWS (mismo payment_id) para probar manejo de duplicados.
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={runBulkTestDuplicates}
+          disabled={bulkDuplicatesLoading}
+        >
+          {bulkDuplicatesLoading ? (
+            <>
+              <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></span>
+              Creando 10 pagos con duplicado...
+            </>
+          ) : (
+            <>🔄 Enviar 10 pagos (2 duplicados) a AWS</>
+          )}
+        </button>
+        {bulkDuplicatesError && (
+          <p style={{ color: 'var(--danger)', marginTop: '1rem' }}>❌ {bulkDuplicatesError}</p>
+        )}
+        {bulkDuplicatesResult && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
+            <strong>✅ Resultado:</strong> {bulkDuplicatesResult.total} pagos creados · <strong>{bulkDuplicatesResult.notificationsSent} notificaciones enviadas</strong> (incluye {bulkDuplicatesResult.duplicates} duplicado) · Payment ID duplicado: <code style={{ fontSize: '0.8rem' }}>{bulkDuplicatesResult.duplicatePaymentId}</code>
           </div>
         )}
       </div>

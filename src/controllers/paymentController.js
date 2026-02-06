@@ -590,6 +590,117 @@ exports.createBulkTestPaymentsApproved = async (req, res) => {
   }
 };
 
+// Crear 10 pagos con 2 notificaciones duplicadas (mismo payment_id enviado 2 veces a AWS)
+exports.createBulkTestWithDuplicates = async (req, res) => {
+  try {
+    const results = { created: 0, notificationsSent: 0, duplicates: 0, errors: [] };
+    const createdPayments = [];
+    let duplicatePayment = null;
+
+    // Crear 10 pagos
+    for (let i = 0; i < 10; i++) {
+      try {
+        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
+        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
+        const amount = BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length];
+
+        const paymentMethod = {
+          type: 'credit_card',
+          brand: ['visa', 'mastercard'][i % 2],
+          lastFourDigits: String(1000 + (i % 9000)),
+          token: null,
+          tokenId: null,
+          panToken: null,
+          commerceToken: null
+        };
+
+        const transactionId = `TXN-DUP-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
+
+        const payment = new Payment({
+          transactionId,
+          merchant: {
+            ...merchant,
+            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
+          },
+          amount,
+          currency: 'ARS',
+          payer: {
+            name: payerName,
+            email: `duplicate${i + 1}@test.com`,
+            documentType: 'DNI',
+            documentNumber: String(40000000 + i)
+          },
+          paymentMethod,
+          status: 'approved',
+          responseCode: '00',
+          responseMessage: 'Transacción aprobada',
+          externalReference: `BULK-DUP-${Date.now()}-${i + 1}`,
+          description: `Pago prueba duplicados #${i + 1}${i === 4 ? ' (DUPLICADO)' : ''}`,
+          sqsAttributes: {
+            allow_commerce_pan_token: 'false',
+            from_batch: 'true',
+            is_force: 'false'
+          }
+        });
+
+        await payment.save();
+        results.created++;
+
+        // Guardar el 5to pago para duplicarlo después
+        if (i === 4) {
+          duplicatePayment = payment;
+        }
+
+        // Enviar notificación normal
+        const notif = await sendNotification(payment);
+        if (notif.success) results.notificationsSent++;
+
+        createdPayments.push({
+          transactionId: payment.transactionId,
+          amount: payment.amount,
+          isDuplicate: i === 4,
+          notificationSent: notif.success
+        });
+      } catch (err) {
+        results.errors.push({ index: i + 1, message: err.message });
+      }
+    }
+
+    // Enviar notificación duplicada del 5to pago
+    if (duplicatePayment) {
+      console.log(`Enviando notificación DUPLICADA para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
+      const duplicateNotif = await sendNotification(duplicatePayment);
+      if (duplicateNotif.success) {
+        results.notificationsSent++;
+        results.duplicates = 1;
+        console.log(`✅ Notificación duplicada enviada exitosamente`);
+      }
+    }
+
+    console.log(`Bulk con duplicados: ${results.created} pagos creados, ${results.notificationsSent} notificaciones enviadas (incluye 1 duplicado)`);
+
+    res.status(201).json({
+      success: true,
+      message: `Se crearon ${results.created} pagos. ${results.notificationsSent} notificaciones enviadas a AWS (incluye ${results.duplicates} duplicado).`,
+      data: {
+        total: results.created,
+        notificationsSent: results.notificationsSent,
+        duplicates: results.duplicates,
+        duplicatePaymentId: duplicatePayment?._id.toString(),
+        payments: createdPayments,
+        errors: results.errors.length ? results.errors : undefined
+      }
+    });
+  } catch (error) {
+    console.error('Error en bulk test con duplicados:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos con duplicados',
+      message: error.message
+    });
+  }
+};
+
 // Obtener un pago por transactionId
 exports.getPayment = async (req, res) => {
   try {

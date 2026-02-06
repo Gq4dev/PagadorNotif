@@ -101,3 +101,16 @@ export const createBulkTestPaymentsApproved = async (count = 50) => {
   
   return response.json()
 }
+
+export const createBulkTestWithDuplicates = async () => {
+  const response = await fetch(`${API_URL}/payments/bulk/test-duplicates`, {
+    method: 'POST'
+  })
+  
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.error || err.message || 'Error al crear pagos con duplicados')
+  }
+  
+  return response.json()
+}
