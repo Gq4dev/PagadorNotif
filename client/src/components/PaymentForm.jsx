@@ -360,8 +360,8 @@ function PaymentForm({ onSuccess }) {
               </>
             ) : (
               <>
-                <div className="result-icon">
-                  {result.status === 'approved' ? '✅' : result.status === 'pending' ? '⏳' : '❌'}
+                <div className="result-icon" style={result.status === 'pending' ? { filter: 'hue-rotate(0deg) saturate(1.5)' } : {}}>
+                  {result.status === 'approved' ? '✅' : result.status === 'pending' ? '⚠️' : '❌'}
                 </div>
                 <h3 className={`result-title ${
                   result.status === 'approved' ? 'success' :
