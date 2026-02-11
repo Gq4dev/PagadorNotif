@@ -139,31 +139,68 @@ const sendNotification = async (payment) => {
       }
     };
 
-    console.log(`Enviando notificación para pago ${payment.transactionId}...`, payload);
+    console.log(`Enviando notificación para pago ${payment.transactionId}...`);
+    console.log(`URL destino: ${QUEUE_URL}`);
+    console.log(`Payload:`, JSON.stringify(payload, null, 2));
 
-    const lambdaResponse = await fetch(QUEUE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // Crear un AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
 
-    if (lambdaResponse.ok) {
-      await Payment.findByIdAndUpdate(payment._id, {
-        notificationSent: true,
-        notificationSentAt: new Date()
+    try {
+      const lambdaResponse = await fetch(QUEUE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
-      console.log(`Notificación enviada exitosamente para pago ${payment.transactionId}`);
-      return { success: true };
-    } else {
-      const errorText = await lambdaResponse.text();
-      console.error(`Error al enviar notificación a Lambda: ${lambdaResponse.status} - ${errorText}`);
-      return { success: false, error: errorText };
+
+      clearTimeout(timeoutId);
+
+      if (lambdaResponse.ok) {
+        await Payment.findByIdAndUpdate(payment._id, {
+          notificationSent: true,
+          notificationSentAt: new Date()
+        });
+        console.log(`Notificación enviada exitosamente para pago ${payment.transactionId}`);
+        return { success: true };
+      } else {
+        const errorText = await lambdaResponse.text();
+        console.error(`Error al enviar notificación a Lambda: ${lambdaResponse.status} - ${errorText}`);
+        return { success: false, error: errorText, status: lambdaResponse.status };
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      throw fetchError;
     }
   } catch (error) {
-    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, error.message);
-    return { success: false, error: error.message };
+    let errorMessage = error.message;
+    let errorDetails = {};
+
+    if (error.name === 'AbortError') {
+      errorMessage = 'Timeout: La solicitud tardó más de 30 segundos';
+      errorDetails = { type: 'timeout', url: QUEUE_URL };
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      errorMessage = `Error de conexión: No se pudo conectar a ${QUEUE_URL}. Verifica que la URL sea correcta y accesible.`;
+      errorDetails = { type: 'connection', code: error.code, url: QUEUE_URL };
+    } else if (error.code === 'ECONNRESET') {
+      errorMessage = 'Error: La conexión fue cerrada por el servidor';
+      errorDetails = { type: 'connection_reset', code: error.code };
+    } else if (error.message.includes('fetch failed')) {
+      errorMessage = `Error de red: ${error.message}. URL: ${QUEUE_URL}`;
+      errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
+    }
+
+    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, errorMessage);
+    console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
+    
+    return { 
+      success: false, 
+      error: errorMessage,
+      details: errorDetails
+    };
   }
 };
 
@@ -213,27 +250,64 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
       }
     };
 
-    console.log(`Enviando notificación con atributos personalizados para pago ${payment.transactionId}...`, payload);
+    console.log(`Enviando notificación con atributos personalizados para pago ${payment.transactionId}...`);
+    console.log(`URL destino: ${QUEUE_URL}`);
+    console.log(`Payload:`, JSON.stringify(payload, null, 2));
 
-    const lambdaResponse = await fetch(QUEUE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // Crear un AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
 
-    if (lambdaResponse.ok) {
-      console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.transactionId}`);
-      return { success: true };
-    } else {
-      const errorText = await lambdaResponse.text();
-      console.error(`Error al enviar notificación: ${lambdaResponse.status} - ${errorText}`);
-      return { success: false, error: errorText };
+    try {
+      const lambdaResponse = await fetch(QUEUE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (lambdaResponse.ok) {
+        console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.transactionId}`);
+        return { success: true };
+      } else {
+        const errorText = await lambdaResponse.text();
+        console.error(`Error al enviar notificación: ${lambdaResponse.status} - ${errorText}`);
+        return { success: false, error: errorText, status: lambdaResponse.status };
+      }
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      throw fetchError;
     }
   } catch (error) {
-    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, error.message);
-    return { success: false, error: error.message };
+    let errorMessage = error.message;
+    let errorDetails = {};
+
+    if (error.name === 'AbortError') {
+      errorMessage = 'Timeout: La solicitud tardó más de 30 segundos';
+      errorDetails = { type: 'timeout', url: QUEUE_URL };
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      errorMessage = `Error de conexión: No se pudo conectar a ${QUEUE_URL}. Verifica que la URL sea correcta y accesible.`;
+      errorDetails = { type: 'connection', code: error.code, url: QUEUE_URL };
+    } else if (error.code === 'ECONNRESET') {
+      errorMessage = 'Error: La conexión fue cerrada por el servidor';
+      errorDetails = { type: 'connection_reset', code: error.code };
+    } else if (error.message.includes('fetch failed')) {
+      errorMessage = `Error de red: ${error.message}. URL: ${QUEUE_URL}`;
+      errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
+    }
+
+    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, errorMessage);
+    console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
+    
+    return { 
+      success: false, 
+      error: errorMessage,
+      details: errorDetails
+    };
   }
 };
 

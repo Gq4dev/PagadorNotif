@@ -27,7 +27,7 @@
 ```
 NODE_ENV=production
 MONGODB_URI=mongodb+srv://user:password@api.ro8hhr9.mongodb.net/pagador?retryWrites=true&w=majority
-NOTIFICATION_SERVICE_URL=https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications
+AWS_SQS_QUEUE_URL=https://xihdqvazw6.execute-api.us-east-1.amazonaws.com/notifications
 PORT=10000
 ```
 

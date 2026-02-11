@@ -594,12 +594,12 @@ curl -X POST "http://localhost:3000/api/payments/bulk/test-duplicates"
 
 Cuando un pago es creado, se envía automáticamente a AWS:
 
-**URL:** `https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications`  
+**URL:** `https://xihdqvazw6.execute-api.us-east-1.amazonaws.com/notifications`  
 **Método:** `POST`  
 **Body:**
 ```json
 {
-  "QueueUrl": "https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications",
+  "QueueUrl": "https://xihdqvazw6.execute-api.us-east-1.amazonaws.com/notifications",
   "MessageBody": "67a0c5f8e4b0a1234567890a",
   "paymentMethod": {
     "type": "credit_card",
