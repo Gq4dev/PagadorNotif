@@ -10,5 +10,6 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: AWS_SQS_QUEUE_URL
-        value: https://zkslv9jlz3.execute-api.us-east-1.amazonaws.com/notifications
+        value: https://sqs.us-east-1.amazonaws.com/567369746673/notification-system-queue-dev
+        
     healthCheckPath: /health
