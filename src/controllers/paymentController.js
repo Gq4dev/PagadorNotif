@@ -23,6 +23,13 @@ const generateFictitiousCommerceToken = () => {
 // URL de la cola SQS (se usa para Lambda y SQS)
 const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL;
 
+// Log de la URL configurada al iniciar
+if (QUEUE_URL) {
+  console.log(`[Configuración] AWS_SQS_QUEUE_URL configurada: ${QUEUE_URL}`);
+} else {
+  console.warn('[Configuración] AWS_SQS_QUEUE_URL NO está configurada');
+}
+
 // Extraer región de la URL de SQS si está disponible, sino usar us-east-1 por defecto
 const getRegionFromUrl = (url) => {
   if (!url) return 'us-east-1';
@@ -31,10 +38,6 @@ const getRegionFromUrl = (url) => {
 };
 
 // Configuración de AWS SQS
-// El SDK de AWS automáticamente detecta credenciales desde:
-// - Variables de entorno (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-// - Archivos de credenciales (~/.aws/credentials)
-// - Roles IAM (en EC2, Lambda, ECS, etc.)
 const sqsClient = QUEUE_URL ? new SQSClient({
   region: getRegionFromUrl(QUEUE_URL)
 }) : null;
@@ -48,7 +51,6 @@ const sendToSQS = async (payment) => {
 
   const paymentId = payment._id.toString();
   
-  // Usar atributos del pago o valores por defecto
   const sqsAttributes = payment.sqsAttributes || {
     allow_commerce_pan_token: 'true',
     from_batch: 'false',
@@ -77,11 +79,6 @@ const sendToSQS = async (payment) => {
 
     const response = await sqsClient.send(command);
     console.log(`Mensaje enviado a SQS para pago ${paymentId}. MessageId: ${response.MessageId}`);
-    console.log(`Atributos SQS:`, {
-      allow_commerce_pan_token: sqsAttributes.allow_commerce_pan_token,
-      from_batch: sqsAttributes.from_batch,
-      is_force: sqsAttributes.is_force
-    });
     return { success: true, messageId: response.MessageId };
   } catch (error) {
     console.error(`Error al enviar mensaje a SQS para pago ${paymentId}:`, error.message);
@@ -89,33 +86,33 @@ const sendToSQS = async (payment) => {
   }
 };
 
-// Función para enviar notificación al servicio AWS Lambda y SQS
+// Función para enviar notificación al servicio AWS Lambda
 const sendNotification = async (payment) => {
   const paymentId = payment._id.toString();
   
   try {
-    // 1. Enviar a Lambda usando AWS_SQS_QUEUE_URL
     if (!QUEUE_URL) {
       console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a Lambda');
       return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
     }
 
-    // Atributos SQS del pago (los que el usuario elige en la UI)
     const sqsAttributes = payment.sqsAttributes || {
       allow_commerce_pan_token: 'true',
       from_batch: 'false',
       is_force: 'false'
     };
 
-    // paymentMethod completo para que viaje a AWS
+    // Obtener paymentMethod del primer método de pago (nueva estructura)
+    const firstPaymentMethod = payment.payment_methods && payment.payment_methods[0] ? payment.payment_methods[0] : {};
+    
     const paymentMethodPayload = {
-      type: payment.paymentMethod?.type || 'credit_card',
-      brand: payment.paymentMethod?.brand || null,
-      lastFourDigits: payment.paymentMethod?.lastFourDigits || null,
-      token: payment.paymentMethod?.token || null,
-      tokenId: payment.paymentMethod?.tokenId || null,
-      panToken: payment.paymentMethod?.panToken || null,
-      commerceToken: payment.paymentMethod?.commerceToken || null
+      type: firstPaymentMethod.media_payment_detail || 'credit_card',
+      brand: firstPaymentMethod.media_payment_detail || null,
+      lastFourDigits: firstPaymentMethod.last_four_digits || null,
+      token: firstPaymentMethod.token || null,
+      tokenId: firstPaymentMethod.tokenId || null,
+      panToken: firstPaymentMethod.panToken || null,
+      commerceToken: firstPaymentMethod.commerceToken || null
     };
 
     // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes, paymentMethod
@@ -139,13 +136,12 @@ const sendNotification = async (payment) => {
       }
     };
 
-    console.log(`Enviando notificación para pago ${payment.transactionId}...`);
+    console.log(`Enviando notificación para pago ${payment.external_transaction_id}...`);
     console.log(`URL destino: ${QUEUE_URL}`);
     console.log(`Payload:`, JSON.stringify(payload, null, 2));
 
-    // Crear un AbortController para timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const lambdaResponse = await fetch(QUEUE_URL, {
@@ -164,7 +160,7 @@ const sendNotification = async (payment) => {
           notificationSent: true,
           notificationSentAt: new Date()
         });
-        console.log(`Notificación enviada exitosamente para pago ${payment.transactionId}`);
+        console.log(`Notificación enviada exitosamente para pago ${payment.external_transaction_id}`);
         return { success: true };
       } else {
         const errorText = await lambdaResponse.text();
@@ -193,7 +189,7 @@ const sendNotification = async (payment) => {
       errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
     }
 
-    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, errorMessage);
+    console.error(`Error al enviar notificación para pago ${payment.external_transaction_id}:`, errorMessage);
     console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
     
     return { 
@@ -204,7 +200,7 @@ const sendNotification = async (payment) => {
   }
 };
 
-// Función auxiliar para enviar notificación con atributos personalizados (para duplicados con is_force)
+// Función auxiliar para enviar notificación con atributos personalizados
 const sendNotificationWithCustomAttributes = async (payment, customAttributes) => {
   const paymentId = payment._id.toString();
   
@@ -220,14 +216,16 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
       is_force: customAttributes?.is_force || payment.sqsAttributes?.is_force || 'false'
     };
 
+    const firstPaymentMethod = payment.payment_methods && payment.payment_methods[0] ? payment.payment_methods[0] : {};
+    
     const paymentMethodPayload = {
-      type: payment.paymentMethod?.type || 'credit_card',
-      brand: payment.paymentMethod?.brand || null,
-      lastFourDigits: payment.paymentMethod?.lastFourDigits || null,
-      token: payment.paymentMethod?.token || null,
-      tokenId: payment.paymentMethod?.tokenId || null,
-      panToken: payment.paymentMethod?.panToken || null,
-      commerceToken: payment.paymentMethod?.commerceToken || null
+      type: firstPaymentMethod.media_payment_detail || 'credit_card',
+      brand: firstPaymentMethod.media_payment_detail || null,
+      lastFourDigits: firstPaymentMethod.last_four_digits || null,
+      token: firstPaymentMethod.token || null,
+      tokenId: firstPaymentMethod.tokenId || null,
+      panToken: firstPaymentMethod.panToken || null,
+      commerceToken: firstPaymentMethod.commerceToken || null
     };
 
     const payload = {
@@ -250,13 +248,11 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
       }
     };
 
-    console.log(`Enviando notificación con atributos personalizados para pago ${payment.transactionId}...`);
+    console.log(`Enviando notificación con atributos personalizados para pago ${payment.external_transaction_id}...`);
     console.log(`URL destino: ${QUEUE_URL}`);
-    console.log(`Payload:`, JSON.stringify(payload, null, 2));
 
-    // Crear un AbortController para timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const lambdaResponse = await fetch(QUEUE_URL, {
@@ -271,7 +267,7 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
       clearTimeout(timeoutId);
 
       if (lambdaResponse.ok) {
-        console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.transactionId}`);
+        console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.external_transaction_id}`);
         return { success: true };
       } else {
         const errorText = await lambdaResponse.text();
@@ -300,7 +296,7 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
       errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
     }
 
-    console.error(`Error al enviar notificación para pago ${payment.transactionId}:`, errorMessage);
+    console.error(`Error al enviar notificación para pago ${payment.external_transaction_id}:`, errorMessage);
     console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
     
     return { 
@@ -313,797 +309,743 @@ const sendNotificationWithCustomAttributes = async (payment, customAttributes) =
 
 // Simular procesamiento de pago (genera resultado aleatorio o basado en reglas)
 const simulatePaymentProcessing = (amount, paymentMethod) => {
-  // Reglas de simulación:
-  // - Montos terminados en 00: siempre aprobado
-  // - Montos terminados en 99: siempre rechazado
-  // - Montos terminados en 50: siempre pending
-  // - Resto: 80% aprobado, 15% rechazado, 5% pending
-  
   const amountStr = amount.toString();
   
   if (amountStr.endsWith('00')) {
     return {
       status: 'approved',
-      responseCode: '00',
-      responseMessage: 'Transacción aprobada'
+      status_detail: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada'
     };
   }
   
   if (amountStr.endsWith('99')) {
     return {
       status: 'rejected',
-      responseCode: '51',
-      responseMessage: 'Fondos insuficientes'
+      status_detail: 'RECHAZADA - Fondos insuficientes'
     };
   }
   
   if (amountStr.endsWith('50')) {
     return {
       status: 'pending',
-      responseCode: '99',
-      responseMessage: 'Transacción en proceso'
+      status_detail: 'PENDIENTE - En proceso de validación'
     };
   }
   
-  // Simulación aleatoria para el resto
-  const r = Math.random();
-  if (r < 0.80) {
+  // Resto: 80% aprobado, 15% rechazado, 5% pending
+  const random = Math.random();
+  if (random < 0.80) {
     return {
       status: 'approved',
-      responseCode: '00',
-      responseMessage: 'Transacción aprobada'
+      status_detail: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada'
     };
-  }
-  if (r < 0.95) {
+  } else if (random < 0.95) {
     return {
       status: 'rejected',
-      responseCode: '51',
-      responseMessage: 'Fondos insuficientes'
+      status_detail: 'RECHAZADA - Transacción rechazada'
+    };
+  } else {
+    return {
+      status: 'pending',
+      status_detail: 'PENDIENTE - En proceso de validación'
     };
   }
-  return {
-    status: 'pending',
-    responseCode: '99',
-    responseMessage: 'Transacción en proceso'
-  };
 };
 
 // Crear un nuevo pago
 exports.createPayment = async (req, res) => {
   try {
     const {
-      merchant,
-      amount,
-      currency,
-      payer,
-      paymentMethod,
-      externalReference,
-      description,
-      metadata,
+      type = 'debit',
+      validation = false,
+      review = false,
+      collector_id = '999',
+      collector_detail = { name: 'PRUEBA' },
+      notification_url,
+      form_url,
+      details,
+      currency_id = 'ARS',
+      payment_methods,
+      final_amount,
+      metadata = {},
+      source,
       sqsAttributes
     } = req.body;
-    
-    // Validaciones básicas
-    if (!merchant || !merchant.id || !merchant.name || !merchant.email) {
+
+    // Validar que haya detalles
+    if (!details || !Array.isArray(details) || details.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Datos del comercio incompletos (id, name, email requeridos)'
+        error: 'Se requiere al menos un detalle (details)'
       });
     }
-    
-    if (!amount || amount <= 0) {
+
+    // Validar que haya métodos de pago
+    if (!payment_methods || !Array.isArray(payment_methods) || payment_methods.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'El monto debe ser mayor a 0'
+        error: 'Se requiere al menos un método de pago (payment_methods)'
       });
     }
-    
-    if (!payer || !payer.name || !payer.email || !payer.documentNumber) {
-      return res.status(400).json({
-        success: false,
-        error: 'Datos del pagador incompletos (name, email, documentNumber requeridos)'
-      });
+
+    // Calcular monto final si no se proporciona
+    const calculatedFinalAmount = final_amount || details.reduce((sum, detail) => sum + (detail.amount || 0), 0);
+
+    // Simular procesamiento basado en el monto
+    const simulation = simulatePaymentProcessing(calculatedFinalAmount, payment_methods[0]);
+
+    // Generar tokens ficticios para el primer método de pago si no existen
+    const firstPaymentMethod = { ...payment_methods[0] };
+    if (!firstPaymentMethod.token) {
+      firstPaymentMethod.token = generateFictitiousToken();
     }
-    
-    if (!paymentMethod || !paymentMethod.type) {
-      return res.status(400).json({
-        success: false,
-        error: 'Método de pago requerido'
-      });
+    if (!firstPaymentMethod.tokenId) {
+      firstPaymentMethod.tokenId = generateFictitiousTokenId();
     }
-    
-    // Generar ID de transacción único
-    const transactionId = `TXN-${Date.now()}-${uuidv4().substring(0, 8).toUpperCase()}`;
-    
-    // Generar tokens ficticios y armar paymentMethod completo
-    const paymentMethodWithTokens = {
-      ...paymentMethod,
-      token: generateFictitiousToken(),
-      tokenId: generateFictitiousTokenId(),
-      panToken: generateFictitiousPanToken(paymentMethod?.brand || 'card'),
-      commerceToken: generateFictitiousCommerceToken()
-    };
-    
-    // Simular procesamiento del pago
-    const processingResult = simulatePaymentProcessing(amount, paymentMethod);
-    
-    // Crear el registro del pago
-    const payment = new Payment({
-      transactionId,
-      merchant,
-      amount,
-      currency: currency || 'ARS',
-      payer,
-      paymentMethod: paymentMethodWithTokens,
-      status: processingResult.status,
-      responseCode: processingResult.responseCode,
-      responseMessage: processingResult.responseMessage,
-      externalReference,
-      description,
+    if (!firstPaymentMethod.panToken) {
+      firstPaymentMethod.panToken = generateFictitiousPanToken(firstPaymentMethod.media_payment_detail || 'card');
+    }
+    if (!firstPaymentMethod.commerceToken) {
+      firstPaymentMethod.commerceToken = generateFictitiousCommerceToken();
+    }
+
+    // Generar códigos de autorización y gateway si no existen
+    if (!firstPaymentMethod.authorization_code) {
+      firstPaymentMethod.authorization_code = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    }
+    if (!firstPaymentMethod.gateway) {
+      firstPaymentMethod.gateway = {
+        establishment_number: 'PRUEBA',
+        transaction_id: Math.floor(Math.random() * 10000000).toString(),
+        batch_number: '1',
+        ticket_number: Math.floor(Math.random() * 10000).toString(),
+        ppt_owner: false
+      };
+    }
+
+    // Generar dígitos de tarjeta si no existen
+    if (!firstPaymentMethod.last_four_digits) {
+      firstPaymentMethod.last_four_digits = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    }
+    if (!firstPaymentMethod.first_six_digits) {
+      firstPaymentMethod.first_six_digits = '450799';
+    }
+
+    const updatedPaymentMethods = [firstPaymentMethod, ...payment_methods.slice(1)];
+
+    // Crear el pago
+    const paymentData = {
+      type,
+      validation,
+      review,
+      collector_id,
+      collector_detail,
+      notification_url: notification_url || null,
+      form_url: form_url || null,
+      details,
+      currency_id,
+      payment_methods: updatedPaymentMethods,
+      final_amount: calculatedFinalAmount,
+      status: simulation.status,
+      status_detail: simulation.status_detail,
       metadata,
+      source: source || {
+        id: uuidv4(),
+        name: 'system-test',
+        type: 'system'
+      },
       sqsAttributes: sqsAttributes || {
         allow_commerce_pan_token: 'true',
         from_batch: 'false',
         is_force: 'false'
-      }
-    });
-    
-    // Guardar en MongoDB
+      },
+      process_date: simulation.status === 'approved' ? new Date() : null,
+      paid_date: simulation.status === 'approved' ? new Date() : null,
+      accreditation_date: simulation.status === 'approved' ? new Date() : null,
+      last_update_date: new Date()
+    };
+
+    const payment = new Payment(paymentData);
     await payment.save();
+
+    // Enviar notificación a AWS para todos los estados
+    const notificationResult = await sendNotification(payment);
     
-    console.log(`Pago procesado: ${transactionId} - Estado: ${processingResult.status}`);
-    
-    // Enviar notificación a AWS para todos los estados (approved, rejected, pending)
-    let notificationResult = null;
-    notificationResult = await sendNotification(payment);
-    
+    if (!notificationResult.success) {
+      console.warn(`No se pudo enviar notificación para pago ${payment.external_transaction_id}:`, notificationResult.error);
+    }
+
     res.status(201).json({
       success: true,
-      data: {
-        transactionId: payment.transactionId,
-        status: payment.status,
-        responseCode: payment.responseCode,
-        responseMessage: payment.responseMessage,
-        amount: payment.amount,
-        currency: payment.currency,
-        merchant: {
-          id: payment.merchant.id,
-          name: payment.merchant.name
-        },
-        paymentMethod: payment.paymentMethod,
-        createdAt: payment.createdAt,
-        notificationSent: notificationResult?.success || false
-      }
+      data: payment.toPaymentJSON()
     });
-    
   } catch (error) {
     console.error('Error al crear pago:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor',
-      message: error.message
+      error: 'Error al crear el pago',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
-// Datos ficticios para bulk test
-const BULK_MERCHANTS = [
-  { id: 'MERCHANT-001', name: 'Tienda Online Demo', email: 'pagos@demo.com' },
-  { id: 'MERCHANT-002', name: 'Comercio Test', email: 'test@comercio.com' },
-  { id: 'MERCHANT-003', name: 'Shop Pagador', email: 'shop@pagador.com' }
-];
-
-const BULK_PAYER_NAMES = ['Juan Pérez', 'María García', 'Carlos López', 'Ana Martínez', 'Luis Rodríguez', 'Laura Sánchez', 'Pedro Fernández', 'Sofía Díaz'];
-
-const BULK_AMOUNTS_APPROVED = [1000, 2500, 5000, 7500, 15000, 20000, 3500, 8900]; // terminan en 00 o dan alta prob aprobación
-const BULK_AMOUNTS_REJECTED = [1999, 3599, 5099]; // terminan en 99
-// Montos que siempre se aprueban (terminan en 00)
-const BULK_AMOUNTS_ALWAYS_APPROVED = [1000, 2000, 3000, 5000, 7500, 10000, 15000, 25000, 4000, 8000];
-
-// Crear N pagos de prueba y enviar notificaciones a AWS
-exports.createBulkTestPayments = async (req, res) => {
-  const count = parseInt(req.query.count) || 1000;
-  const allApproved = req.query.allApproved === 'true';
-  const withoutPanToken = req.query.withoutPanToken === 'true';
-  const maxCount = Math.min(Math.max(1, count), 10000);
-
+// Listar pagos con filtros
+exports.listPayments = async (req, res) => {
   try {
-    const results = { created: 0, approved: 0, rejected: 0, notificationsSent: 0, errors: [] };
-    const createdPayments = [];
+    const {
+      collector_id,
+      status,
+      limit = 50,
+      skip = 0,
+      sort = '-createdAt'
+    } = req.query;
 
-    for (let i = 0; i < maxCount; i++) {
-      try {
-        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
-        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
-        
-        // Si allApproved=true, usar montos que siempre aprueban, sino usar lógica normal
-        const amount = allApproved
-          ? BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length]
-          : (i % 5 === 4
-              ? BULK_AMOUNTS_REJECTED[i % BULK_AMOUNTS_REJECTED.length]
-              : BULK_AMOUNTS_APPROVED[i % BULK_AMOUNTS_APPROVED.length]);
+    const query = {};
+    if (collector_id) query.collector_id = collector_id;
+    if (status) query.status = status;
 
-        const paymentMethod = {
-          type: 'credit_card',
-          brand: ['visa', 'mastercard'][i % 2],
-          lastFourDigits: String(1000 + (i % 9000))
-        };
+    const payments = await Payment.find(query)
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .sort(sort)
+      .lean();
 
-        // Si withoutPanToken=true, no generar tokens
-        const paymentMethodWithTokens = withoutPanToken
-          ? {
-              ...paymentMethod,
-              token: null,
-              tokenId: null,
-              panToken: null,
-              commerceToken: null
-            }
-          : {
-              ...paymentMethod,
-              token: generateFictitiousToken(),
-              tokenId: generateFictitiousTokenId(),
-              panToken: generateFictitiousPanToken(paymentMethod.brand),
-              commerceToken: generateFictitiousCommerceToken()
-            };
+    const total = await Payment.countDocuments(query);
 
-        const transactionId = `TXN-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
-        
-        // Si allApproved=true, forzar aprobación
-        const processingResult = allApproved
-          ? { status: 'approved', responseCode: '00', responseMessage: 'Transacción aprobada' }
-          : simulatePaymentProcessing(amount, paymentMethod);
-
-        const payment = new Payment({
-          transactionId,
-          merchant: {
-            ...merchant,
-            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
-          },
-          amount,
-          currency: 'ARS',
-          payer: {
-            name: payerName,
-            email: `payer${i + 1}@test.com`,
-            documentType: 'DNI',
-            documentNumber: String(20000000 + i)
-          },
-          paymentMethod: paymentMethodWithTokens,
-          status: processingResult.status,
-          responseCode: processingResult.responseCode,
-          responseMessage: processingResult.responseMessage,
-          externalReference: `BULK-${Date.now()}-${i + 1}`,
-          description: `Pago de prueba bulk #${i + 1}${allApproved ? ' (aprobado)' : ''}${withoutPanToken ? ' (sin panToken)' : ''}`,
-          sqsAttributes: {
-            allow_commerce_pan_token: withoutPanToken ? 'false' : 'true',
-            from_batch: 'true',
-            is_force: 'false'
-          }
-        });
-
-        await payment.save();
-        results.created++;
-        if (payment.status === 'approved') results.approved++;
-        else if (payment.status === 'rejected') results.rejected++;
-
-        // Enviar notificación a AWS para todos (approved, rejected, pending)
-        const notif = await sendNotification(payment);
-        if (notif.success) results.notificationsSent++;
-
-        createdPayments.push({
-          transactionId: payment.transactionId,
-          status: payment.status,
-          amount: payment.amount,
-          notificationSent: notif.success
-        });
-      } catch (err) {
-        results.errors.push({ index: i + 1, message: err.message });
-      }
-    }
-
-    console.log(`Bulk test: ${results.created} pagos creados, ${results.approved} aprobados, ${results.notificationsSent} notificaciones enviadas a AWS`);
-
-    res.status(201).json({
+    res.json({
       success: true,
-      message: `Se crearon ${results.created} pagos de prueba. ${results.notificationsSent} notificaciones enviadas a AWS.`,
-      data: {
-        total: results.created,
-        approved: results.approved,
-        rejected: results.rejected,
-        notificationsSent: results.notificationsSent,
-        payments: createdPayments,
-        errors: results.errors.length ? results.errors : undefined
+      data: payments.map(p => {
+        const payment = { ...p };
+        // Convertir fechas a ISO string
+        if (payment.request_date) payment.request_date = payment.request_date.toISOString();
+        if (payment.due_date) payment.due_date = payment.due_date.toISOString();
+        if (payment.last_due_date) payment.last_due_date = payment.last_due_date.toISOString();
+        if (payment.process_date) payment.process_date = payment.process_date.toISOString();
+        if (payment.paid_date) payment.paid_date = payment.paid_date.toISOString();
+        if (payment.accreditation_date) payment.accreditation_date = payment.accreditation_date.toISOString();
+        if (payment.last_update_date) payment.last_update_date = payment.last_update_date.toISOString();
+        return payment;
+      }),
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        skip: parseInt(skip),
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
-    console.error('Error en bulk test:', error);
+    console.error('Error al listar pagos:', error);
     res.status(500).json({
       success: false,
-      error: 'Error al crear pagos de prueba',
-      message: error.message
+      error: 'Error al listar los pagos'
     });
   }
 };
 
-// Crear N pagos todos aprobados, algunos con panToken y otros sin
-exports.createBulkTestPaymentsApproved = async (req, res) => {
-  const count = parseInt(req.query.count) || 50;
-  const maxCount = Math.min(Math.max(1, count), 10000);
-
-  try {
-    const results = { created: 0, withPanToken: 0, withoutPanToken: 0, notificationsSent: 0, errors: [] };
-    const createdPayments = [];
-
-    for (let i = 0; i < maxCount; i++) {
-      try {
-        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
-        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
-        const amount = BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length];
-        const withPanToken = i % 2 === 0; // mitad con panToken, mitad sin
-
-        const paymentMethodBase = {
-          type: 'credit_card',
-          brand: ['visa', 'mastercard'][i % 2],
-          lastFourDigits: String(1000 + (i % 9000))
-        };
-
-        const paymentMethodWithTokens = withPanToken
-          ? {
-              ...paymentMethodBase,
-              token: generateFictitiousToken(),
-              tokenId: generateFictitiousTokenId(),
-              panToken: generateFictitiousPanToken(paymentMethodBase.brand),
-              commerceToken: generateFictitiousCommerceToken()
-            }
-          : {
-              ...paymentMethodBase,
-              token: null,
-              tokenId: null,
-              panToken: null,
-              commerceToken: null
-            };
-
-        const transactionId = `TXN-APP-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
-
-        const payment = new Payment({
-          transactionId,
-          merchant: {
-            ...merchant,
-            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
-          },
-          amount,
-          currency: 'ARS',
-          payer: {
-            name: payerName,
-            email: `approved${i + 1}@test.com`,
-            documentType: 'DNI',
-            documentNumber: String(30000000 + i)
-          },
-          paymentMethod: paymentMethodWithTokens,
-          status: 'approved',
-          responseCode: '00',
-          responseMessage: 'Transacción aprobada',
-          externalReference: `BULK-APP-${Date.now()}-${i + 1}`,
-          description: `Pago aprobado prueba #${i + 1}${withPanToken ? ' (con panToken)' : ' (sin panToken)'}`,
-          sqsAttributes: {
-            allow_commerce_pan_token: withPanToken ? 'true' : 'false',
-            from_batch: 'true',
-            is_force: 'false'
-          }
-        });
-
-        await payment.save();
-        results.created++;
-        if (withPanToken) results.withPanToken++;
-        else results.withoutPanToken++;
-
-        const notif = await sendNotification(payment);
-        if (notif.success) results.notificationsSent++;
-
-        createdPayments.push({
-          transactionId: payment.transactionId,
-          amount: payment.amount,
-          withPanToken,
-          notificationSent: notif.success
-        });
-      } catch (err) {
-        results.errors.push({ index: i + 1, message: err.message });
-      }
-    }
-
-    console.log(`Bulk approved: ${results.created} pagos (${results.withPanToken} con panToken, ${results.withoutPanToken} sin), ${results.notificationsSent} notificaciones a AWS`);
-
-    res.status(201).json({
-      success: true,
-      message: `Se crearon ${results.created} pagos aprobados. ${results.withPanToken} con panToken, ${results.withoutPanToken} sin. ${results.notificationsSent} notificaciones enviadas a AWS.`,
-      data: {
-        total: results.created,
-        withPanToken: results.withPanToken,
-        withoutPanToken: results.withoutPanToken,
-        notificationsSent: results.notificationsSent,
-        payments: createdPayments,
-        errors: results.errors.length ? results.errors : undefined
-      }
-    });
-  } catch (error) {
-    console.error('Error en bulk test approved:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al crear pagos de prueba aprobados',
-      message: error.message
-    });
-  }
-};
-
-// Crear 10 pagos con 2 notificaciones duplicadas (mismo payment_id enviado 2 veces a AWS)
-exports.createBulkTestWithDuplicates = async (req, res) => {
-  try {
-    const results = { created: 0, notificationsSent: 0, duplicates: 0, errors: [] };
-    const createdPayments = [];
-    let duplicatePayment = null;
-
-    // Crear 10 pagos
-    for (let i = 0; i < 10; i++) {
-      try {
-        const merchant = BULK_MERCHANTS[i % BULK_MERCHANTS.length];
-        const payerName = BULK_PAYER_NAMES[i % BULK_PAYER_NAMES.length];
-        const amount = BULK_AMOUNTS_ALWAYS_APPROVED[i % BULK_AMOUNTS_ALWAYS_APPROVED.length];
-
-        const paymentMethod = {
-          type: 'credit_card',
-          brand: ['visa', 'mastercard'][i % 2],
-          lastFourDigits: String(1000 + (i % 9000)),
-          token: null,
-          tokenId: null,
-          panToken: null,
-          commerceToken: null
-        };
-
-        const transactionId = `TXN-DUP-${Date.now()}-${i}-${uuidv4().substring(0, 6).toUpperCase()}`;
-
-        const payment = new Payment({
-          transactionId,
-          merchant: {
-            ...merchant,
-            notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
-          },
-          amount,
-          currency: 'ARS',
-          payer: {
-            name: payerName,
-            email: `duplicate${i + 1}@test.com`,
-            documentType: 'DNI',
-            documentNumber: String(40000000 + i)
-          },
-          paymentMethod,
-          status: 'approved',
-          responseCode: '00',
-          responseMessage: 'Transacción aprobada',
-          externalReference: `BULK-DUP-${Date.now()}-${i + 1}`,
-          description: `Pago prueba duplicados #${i + 1}${i === 4 ? ' (DUPLICADO)' : ''}`,
-          sqsAttributes: {
-            allow_commerce_pan_token: 'false',
-            from_batch: 'true',
-            is_force: 'false'
-          }
-        });
-
-        await payment.save();
-        results.created++;
-
-        // Guardar el 5to pago para duplicarlo después
-        if (i === 4) {
-          duplicatePayment = payment;
-        }
-
-        // Enviar notificación normal
-        const notif = await sendNotification(payment);
-        if (notif.success) results.notificationsSent++;
-
-        createdPayments.push({
-          transactionId: payment.transactionId,
-          amount: payment.amount,
-          isDuplicate: i === 4,
-          notificationSent: notif.success
-        });
-      } catch (err) {
-        results.errors.push({ index: i + 1, message: err.message });
-      }
-    }
-
-    // Enviar primera notificación duplicada del 5to pago (normal)
-    if (duplicatePayment) {
-      console.log(`Enviando primera notificación DUPLICADA para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
-      const duplicateNotif = await sendNotification(duplicatePayment);
-      if (duplicateNotif.success) {
-        results.notificationsSent++;
-        results.duplicates++;
-        console.log(`✅ Primera notificación duplicada enviada exitosamente`);
-      }
-    }
-
-    // Enviar segunda notificación duplicada del 5to pago con is_force: true
-    if (duplicatePayment) {
-      console.log(`Enviando segunda notificación DUPLICADA con is_force=true para pago ${duplicatePayment.transactionId} (payment_id: ${duplicatePayment._id})`);
-      const duplicateForceNotif = await sendNotificationWithCustomAttributes(duplicatePayment, {
-        allow_commerce_pan_token: 'false',
-        from_batch: 'true',
-        is_force: 'true'
-      });
-      if (duplicateForceNotif.success) {
-        results.notificationsSent++;
-        results.duplicates++;
-        console.log(`✅ Segunda notificación duplicada con is_force=true enviada exitosamente`);
-      }
-    }
-
-    console.log(`Bulk con duplicados: ${results.created} pagos creados, ${results.notificationsSent} notificaciones enviadas (incluye ${results.duplicates} duplicados)`);
-
-    res.status(201).json({
-      success: true,
-      message: `Se crearon ${results.created} pagos. ${results.notificationsSent} notificaciones enviadas a AWS (incluye ${results.duplicates} duplicados: 1 normal + 1 con is_force=true).`,
-      data: {
-        total: results.created,
-        notificationsSent: results.notificationsSent,
-        duplicates: results.duplicates,
-        duplicatePaymentId: duplicatePayment?._id.toString(),
-        payments: createdPayments,
-        errors: results.errors.length ? results.errors : undefined
-      }
-    });
-  } catch (error) {
-    console.error('Error en bulk test con duplicados:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error al crear pagos con duplicados',
-      message: error.message
-    });
-  }
-};
-
-// Obtener un pago por transactionId
+// Obtener un pago específico
 exports.getPayment = async (req, res) => {
   try {
     const { transactionId } = req.params;
     
-    const payment = await Payment.findOne({ transactionId });
-    
+    const payment = await Payment.findOne({
+      $or: [
+        { external_transaction_id: transactionId },
+        { id: transactionId },
+        { transactionId: transactionId }
+      ]
+    });
+
     if (!payment) {
       return res.status(404).json({
         success: false,
         error: 'Pago no encontrado'
       });
     }
-    
+
     res.json({
       success: true,
-      data: payment
+      data: payment.toPaymentJSON()
     });
-    
   } catch (error) {
     console.error('Error al obtener pago:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'Error al obtener el pago'
     });
   }
 };
 
-// Listar pagos con filtros (útil para el Lambda/SQS)
-exports.listPayments = async (req, res) => {
-  try {
-    const {
-      merchantId,
-      status,
-      notificationSent,
-      startDate,
-      endDate,
-      page = 1,
-      limit = 20
-    } = req.query;
-    
-    // Construir filtro
-    const filter = {};
-    
-    if (merchantId) {
-      filter['merchant.id'] = merchantId;
-    }
-    
-    if (status) {
-      filter.status = status;
-    }
-    
-    if (notificationSent !== undefined) {
-      filter.notificationSent = notificationSent === 'true';
-    }
-    
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) {
-        filter.createdAt.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        filter.createdAt.$lte = new Date(endDate);
-      }
-    }
-    
-    // Paginación
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const [payments, total] = await Promise.all([
-      Payment.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Payment.countDocuments(filter)
-    ]);
-    
-    res.json({
-      success: true,
-      data: payments,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error al listar pagos:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Error interno del servidor'
-    });
-  }
-};
-
-// Obtener pagos pendientes de notificación (endpoint para Lambda/SQS)
+// Obtener pagos pendientes de notificación
 exports.getPendingNotifications = async (req, res) => {
   try {
-    const { limit = 100 } = req.query;
-    
     const payments = await Payment.find({
       notificationSent: false,
-      status: { $in: ['approved', 'rejected'] }
-    })
-      .sort({ createdAt: 1 })
-      .limit(parseInt(limit))
-      .select('transactionId merchant amount currency status responseCode responseMessage payer externalReference createdAt sqsAttributes');
-    
+      status: { $in: ['approved', 'rejected', 'pending'] }
+    }).limit(100);
+
     res.json({
       success: true,
-      count: payments.length,
-      data: payments
+      data: payments.map(p => p.toPaymentJSON()),
+      count: payments.length
     });
-    
   } catch (error) {
-    console.error('Error al obtener notificaciones pendientes:', error);
+    console.error('Error al obtener pagos pendientes:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'Error al obtener pagos pendientes'
     });
   }
 };
 
-// Marcar pago como notificado (para ser llamado por Lambda después de enviar)
+// Marcar un pago como notificado
 exports.markAsNotified = async (req, res) => {
   try {
     const { transactionId } = req.params;
     
     const payment = await Payment.findOneAndUpdate(
-      { transactionId },
+      {
+        $or: [
+          { external_transaction_id: transactionId },
+          { id: transactionId },
+          { transactionId: transactionId }
+        ]
+      },
       {
         notificationSent: true,
         notificationSentAt: new Date()
       },
       { new: true }
     );
-    
+
     if (!payment) {
       return res.status(404).json({
         success: false,
         error: 'Pago no encontrado'
       });
     }
-    
+
     res.json({
       success: true,
-      message: 'Pago marcado como notificado',
-      data: {
-        transactionId: payment.transactionId,
-        notificationSent: payment.notificationSent,
-        notificationSentAt: payment.notificationSentAt
-      }
+      data: payment.toPaymentJSON()
     });
-    
   } catch (error) {
     console.error('Error al marcar como notificado:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'Error al marcar como notificado'
     });
   }
 };
 
-// Marcar múltiples pagos como notificados (bulk update)
+// Marcar múltiples pagos como notificados
 exports.markMultipleAsNotified = async (req, res) => {
   try {
-    const { transactionIds } = req.body;
+    const { paymentIds } = req.body;
     
-    if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+    if (!Array.isArray(paymentIds) || paymentIds.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Se requiere un array de transactionIds'
+        error: 'Se requiere un array de IDs de pagos'
       });
     }
-    
+
     const result = await Payment.updateMany(
-      { transactionId: { $in: transactionIds } },
+      {
+        $or: [
+          { external_transaction_id: { $in: paymentIds } },
+          { id: { $in: paymentIds } },
+          { transactionId: { $in: paymentIds } }
+        ]
+      },
       {
         notificationSent: true,
         notificationSentAt: new Date()
       }
     );
-    
+
     res.json({
       success: true,
-      message: `${result.modifiedCount} pagos marcados como notificados`,
-      data: {
-        matched: result.matchedCount,
-        modified: result.modifiedCount
-      }
+      updated: result.modifiedCount
     });
-    
   } catch (error) {
     console.error('Error al marcar múltiples como notificados:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'Error al marcar múltiples como notificados'
     });
   }
 };
 
-// Refund (reembolso) - cambiar estado
+// Reembolsar un pago
 exports.refundPayment = async (req, res) => {
   try {
     const { transactionId } = req.params;
     
-    const payment = await Payment.findOne({ transactionId });
-    
+    const payment = await Payment.findOne({
+      $or: [
+        { external_transaction_id: transactionId },
+        { id: transactionId },
+        { transactionId: transactionId }
+      ]
+    });
+
     if (!payment) {
       return res.status(404).json({
         success: false,
         error: 'Pago no encontrado'
       });
     }
-    
+
     if (payment.status !== 'approved') {
       return res.status(400).json({
         success: false,
         error: 'Solo se pueden reembolsar pagos aprobados'
       });
     }
-    
+
     payment.status = 'refunded';
-    payment.notificationSent = false; // Reset para que se notifique el reembolso
+    payment.status_detail = 'REEMBOLSADO - Pago reembolsado';
+    payment.last_update_date = new Date();
     await payment.save();
-    
+
     res.json({
       success: true,
-      message: 'Pago reembolsado exitosamente',
-      data: {
-        transactionId: payment.transactionId,
-        status: payment.status,
-        amount: payment.amount,
-        currency: payment.currency
-      }
+      data: payment.toPaymentJSON()
     });
-    
   } catch (error) {
     console.error('Error al reembolsar pago:', error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: 'Error al reembolsar el pago'
+    });
+  }
+};
+
+// Crear pagos de prueba en bulk
+exports.createBulkTestPayments = async (req, res) => {
+  try {
+    const count = parseInt(req.query.count) || 1000;
+    const allApproved = req.query.allApproved === 'true';
+    const withoutPanToken = req.query.withoutPanToken === 'true';
+
+    if (count > 10000) {
+      return res.status(400).json({
+        success: false,
+        error: 'El máximo de pagos permitidos es 10000'
+      });
+    }
+
+    const payments = [];
+    const now = new Date();
+
+    for (let i = 0; i < count; i++) {
+      const amount = Math.floor(Math.random() * 10000) + 100;
+      const finalAmount = allApproved ? parseFloat(`${amount}.00`) : amount + Math.random();
+
+      const simulation = allApproved 
+        ? { status: 'approved', status_detail: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada' }
+        : simulatePaymentProcessing(finalAmount, null);
+
+      const paymentMethod = {
+        amount: finalAmount,
+        media_payment_id: 9,
+        media_payment_detail: 'VISA CREDIT',
+        last_four_digits: Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
+        first_six_digits: '450799',
+        installments: 1,
+        authorization_code: Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
+        gateway: {
+          establishment_number: 'PRUEBA',
+          transaction_id: Math.floor(Math.random() * 10000000).toString(),
+          batch_number: '1',
+          ticket_number: Math.floor(Math.random() * 10000).toString(),
+          ppt_owner: false
+        },
+        payment_method_id: 0,
+        token: generateFictitiousToken(),
+        tokenId: generateFictitiousTokenId(),
+        commerceToken: generateFictitiousCommerceToken()
+      };
+
+      if (!withoutPanToken) {
+        paymentMethod.panToken = generateFictitiousPanToken();
+      }
+
+      const paymentData = {
+        type: 'debit',
+        validation: false,
+        review: false,
+        collector_id: '999',
+        collector_detail: { name: 'PRUEBA' },
+        notification_url: null,
+        form_url: null,
+        details: [{
+          amount: finalAmount,
+          external_reference: `TEST-${i + 1}`,
+          concept_id: 'prueba',
+          concept_description: `Concepto de prueba ${i + 1}`
+        }],
+        currency_id: 'ARS',
+        payment_methods: [paymentMethod],
+        final_amount: finalAmount,
+        status: simulation.status,
+        status_detail: simulation.status_detail,
+        metadata: {},
+        source: {
+          id: uuidv4(),
+          name: 'system-test',
+          type: 'system'
+        },
+        sqsAttributes: {
+          allow_commerce_pan_token: 'true',
+          from_batch: 'true',
+          is_force: 'false'
+        },
+        process_date: simulation.status === 'approved' ? now : null,
+        paid_date: simulation.status === 'approved' ? now : null,
+        accreditation_date: simulation.status === 'approved' ? now : null,
+        last_update_date: now
+      };
+
+      payments.push(paymentData);
+    }
+
+    const createdPayments = await Payment.insertMany(payments);
+
+    // Enviar notificaciones a AWS
+    let notificationsSent = 0;
+    for (const payment of createdPayments) {
+      const result = await sendNotification(payment);
+      if (result.success) notificationsSent++;
+    }
+
+    res.json({
+      success: true,
+      created: createdPayments.length,
+      notificationsSent,
+      data: createdPayments.map(p => p.toPaymentJSON ? p.toPaymentJSON() : p)
+    });
+  } catch (error) {
+    console.error('Error al crear pagos bulk:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos bulk',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Crear pagos aprobados con mix de panToken
+exports.createBulkTestPaymentsApproved = async (req, res) => {
+  try {
+    const count = parseInt(req.query.count) || 50;
+
+    if (count > 10000) {
+      return res.status(400).json({
+        success: false,
+        error: 'El máximo de pagos permitidos es 10000'
+      });
+    }
+
+    const payments = [];
+    const now = new Date();
+
+    for (let i = 0; i < count; i++) {
+      const amount = parseFloat(`${Math.floor(Math.random() * 10000) + 100}.00`);
+      const hasPanToken = i % 2 === 0; // Mitad con, mitad sin
+
+      const paymentMethod = {
+        amount,
+        media_payment_id: 9,
+        media_payment_detail: 'VISA CREDIT',
+        last_four_digits: Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
+        first_six_digits: '450799',
+        installments: 1,
+        authorization_code: Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
+        gateway: {
+          establishment_number: 'PRUEBA',
+          transaction_id: Math.floor(Math.random() * 10000000).toString(),
+          batch_number: '1',
+          ticket_number: Math.floor(Math.random() * 10000).toString(),
+          ppt_owner: false
+        },
+        payment_method_id: 0,
+        token: generateFictitiousToken(),
+        tokenId: generateFictitiousTokenId(),
+        commerceToken: generateFictitiousCommerceToken()
+      };
+
+      if (hasPanToken) {
+        paymentMethod.panToken = generateFictitiousPanToken();
+      }
+
+      const paymentData = {
+        type: 'debit',
+        validation: false,
+        review: false,
+        collector_id: '999',
+        collector_detail: { name: 'PRUEBA' },
+        notification_url: null,
+        form_url: null,
+        details: [{
+          amount,
+          external_reference: `TEST-APPROVED-${i + 1}`,
+          concept_id: 'prueba',
+          concept_description: `Concepto de prueba aprobado ${i + 1}`
+        }],
+        currency_id: 'ARS',
+        payment_methods: [paymentMethod],
+        final_amount: amount,
+        status: 'approved',
+        status_detail: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada',
+        metadata: {},
+        source: {
+          id: uuidv4(),
+          name: 'system-test',
+          type: 'system'
+        },
+        sqsAttributes: {
+          allow_commerce_pan_token: 'true',
+          from_batch: 'true',
+          is_force: 'false'
+        },
+        process_date: now,
+        paid_date: now,
+        accreditation_date: now,
+        last_update_date: now
+      };
+
+      payments.push(paymentData);
+    }
+
+    const createdPayments = await Payment.insertMany(payments);
+
+    // Enviar notificaciones a AWS
+    let notificationsSent = 0;
+    for (const payment of createdPayments) {
+      const result = await sendNotification(payment);
+      if (result.success) notificationsSent++;
+    }
+
+    res.json({
+      success: true,
+      created: createdPayments.length,
+      notificationsSent,
+      data: createdPayments.map(p => p.toPaymentJSON ? p.toPaymentJSON() : p)
+    });
+  } catch (error) {
+    console.error('Error al crear pagos aprobados:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos aprobados',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Crear pagos con duplicados para testing
+exports.createBulkTestWithDuplicates = async (req, res) => {
+  try {
+    const payments = [];
+    const now = new Date();
+
+    // Crear 10 pagos únicos
+    for (let i = 0; i < 10; i++) {
+      const amount = parseFloat(`${Math.floor(Math.random() * 1000) + 100}.00`);
+
+      const paymentMethod = {
+        amount,
+        media_payment_id: 9,
+        media_payment_detail: 'VISA CREDIT',
+        last_four_digits: Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
+        first_six_digits: '450799',
+        installments: 1,
+        authorization_code: Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
+        gateway: {
+          establishment_number: 'PRUEBA',
+          transaction_id: Math.floor(Math.random() * 10000000).toString(),
+          batch_number: '1',
+          ticket_number: Math.floor(Math.random() * 10000).toString(),
+          ppt_owner: false
+        },
+        payment_method_id: 0,
+        token: generateFictitiousToken(),
+        tokenId: generateFictitiousTokenId(),
+        panToken: generateFictitiousPanToken(),
+        commerceToken: generateFictitiousCommerceToken()
+      };
+
+      const paymentData = {
+        type: 'debit',
+        validation: false,
+        review: false,
+        collector_id: '999',
+        collector_detail: { name: 'PRUEBA' },
+        notification_url: null,
+        form_url: null,
+        details: [{
+          amount,
+          external_reference: `TEST-DUP-${i + 1}`,
+          concept_id: 'prueba',
+          concept_description: `Concepto de prueba duplicado ${i + 1}`
+        }],
+        currency_id: 'ARS',
+        payment_methods: [paymentMethod],
+        final_amount: amount,
+        status: 'approved',
+        status_detail: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada',
+        metadata: {},
+        source: {
+          id: uuidv4(),
+          name: 'system-test',
+          type: 'system'
+        },
+        sqsAttributes: {
+          allow_commerce_pan_token: 'true',
+          from_batch: 'false',
+          is_force: 'false'
+        },
+        process_date: now,
+        paid_date: now,
+        accreditation_date: now,
+        last_update_date: now
+      };
+
+      payments.push(paymentData);
+    }
+
+    const createdPayments = await Payment.insertMany(payments);
+
+    // Enviar notificaciones normales para todos
+    let notificationsSent = 0;
+    for (const payment of createdPayments) {
+      const result = await sendNotification(payment);
+      if (result.success) notificationsSent++;
+    }
+
+    // Para el 5to pago (índice 4), enviar una segunda notificación con is_force: true
+    if (createdPayments[4]) {
+      const duplicateResult = await sendNotificationWithCustomAttributes(createdPayments[4], {
+        allow_commerce_pan_token: 'true',
+        from_batch: 'false',
+        is_force: 'true'
+      });
+      if (duplicateResult.success) notificationsSent++;
+    }
+
+    res.json({
+      success: true,
+      created: createdPayments.length,
+      notificationsSent,
+      duplicatePaymentId: createdPayments[4]?.id || null,
+      data: createdPayments.map(p => p.toPaymentJSON ? p.toPaymentJSON() : p)
+    });
+  } catch (error) {
+    console.error('Error al crear pagos con duplicados:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al crear pagos con duplicados',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

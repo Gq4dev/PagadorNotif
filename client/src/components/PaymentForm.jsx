@@ -2,27 +2,25 @@ import { useState } from 'react'
 import { createPayment } from '../services/api'
 
 const initialFormData = {
-  merchant: {
-    id: 'MERCHANT-001',
-    name: 'Mi Tienda Online',
-    email: 'pagos@mitienda.com',
-    notificationUrl: 'https://comerciowebhook.onrender.com/webhook'
+  type: 'debit',
+  validation: false,
+  review: false,
+  collector_id: '999',
+  collector_detail: {
+    name: 'PRUEBA'
   },
+  notification_url: 'https://comerciowebhook.onrender.com/webhook',
+  form_url: null,
   amount: '',
-  currency: 'ARS',
-  payer: {
-    name: 'Juan Pérez',
-    email: 'juan.perez@email.com',
-    documentType: 'DNI',
-    documentNumber: '12345678'
-  },
-  paymentMethod: {
-    type: 'credit_card',
-    brand: 'visa',
-    lastFourDigits: '4242'
-  },
-  externalReference: 'ORDER-12345',
-  description: 'Compra en Mi Tienda Online',
+  currency_id: 'ARS',
+  external_reference: 'ORDER-12345',
+  concept_id: 'prueba',
+  concept_description: 'Concepto de prueba',
+  media_payment_id: 9,
+  media_payment_detail: 'VISA CREDIT',
+  last_four_digits: '0010',
+  first_six_digits: '450799',
+  installments: 1,
   sqsAttributes: {
     allow_commerce_pan_token: 'true',
     from_batch: 'false',
@@ -57,9 +55,35 @@ function PaymentForm({ onSuccess }) {
     setLoading(true)
 
     try {
+      const amount = parseFloat(formData.amount)
+      
+      // Transformar a la nueva estructura
       const payload = {
-        ...formData,
-        amount: parseFloat(formData.amount)
+        type: formData.type,
+        validation: formData.validation,
+        review: formData.review,
+        collector_id: formData.collector_id,
+        collector_detail: formData.collector_detail,
+        notification_url: formData.notification_url || null,
+        form_url: formData.form_url || null,
+        details: [{
+          amount: amount,
+          external_reference: formData.external_reference || null,
+          concept_id: formData.concept_id || 'prueba',
+          concept_description: formData.concept_description || 'Concepto de prueba'
+        }],
+        currency_id: formData.currency_id,
+        payment_methods: [{
+          amount: amount,
+          media_payment_id: formData.media_payment_id || 9,
+          media_payment_detail: formData.media_payment_detail || 'VISA CREDIT',
+          last_four_digits: formData.last_four_digits || null,
+          first_six_digits: formData.first_six_digits || '450799',
+          installments: formData.installments || 1,
+          payment_method_id: 0
+        }],
+        final_amount: amount,
+        sqsAttributes: formData.sqsAttributes
       }
       
       const response = await createPayment(payload)
@@ -100,34 +124,25 @@ function PaymentForm({ onSuccess }) {
         </h2>
 
         <form onSubmit={handleSubmit}>
-          {/* Datos del Comercio */}
+          {/* Datos del Colector */}
           <div className="form-section">
-            <h3 className="form-section-title">Datos del Comercio</h3>
+            <h3 className="form-section-title">Datos del Colector</h3>
             <div className="form-grid">
               <div className="form-group">
-                <label>ID del Comercio</label>
+                <label>ID del Colector</label>
                 <input
                   type="text"
-                  value={formData.merchant.id}
-                  onChange={(e) => handleChange('merchant', 'id', e.target.value)}
+                  value={formData.collector_id}
+                  onChange={(e) => handleChange(null, 'collector_id', e.target.value)}
                   required
                 />
               </div>
               <div className="form-group">
-                <label>Nombre del Comercio</label>
+                <label>Nombre del Colector</label>
                 <input
                   type="text"
-                  value={formData.merchant.name}
-                  onChange={(e) => handleChange('merchant', 'name', e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email del Comercio</label>
-                <input
-                  type="email"
-                  value={formData.merchant.email}
-                  onChange={(e) => handleChange('merchant', 'email', e.target.value)}
+                  value={formData.collector_detail.name}
+                  onChange={(e) => handleChange('collector_detail', 'name', e.target.value)}
                   required
                 />
               </div>
@@ -135,10 +150,22 @@ function PaymentForm({ onSuccess }) {
                 <label>URL de Notificación</label>
                 <input
                   type="url"
-                  value={formData.merchant.notificationUrl}
-                  onChange={(e) => handleChange('merchant', 'notificationUrl', e.target.value)}
+                  value={formData.notification_url || ''}
+                  onChange={(e) => handleChange(null, 'notification_url', e.target.value)}
                   placeholder="https://comerciowebhook.onrender.com/webhook"
                 />
+              </div>
+              <div className="form-group">
+                <label>Tipo de Pago</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => handleChange(null, 'type', e.target.value)}
+                >
+                  <option value="debit">Débito</option>
+                  <option value="credit">Crédito</option>
+                  <option value="cash">Efectivo</option>
+                  <option value="bank_transfer">Transferencia Bancaria</option>
+                </select>
               </div>
             </div>
           </div>
@@ -162,8 +189,8 @@ function PaymentForm({ onSuccess }) {
               <div className="form-group">
                 <label>Moneda</label>
                 <select
-                  value={formData.currency}
-                  onChange={(e) => handleChange(null, 'currency', e.target.value)}
+                  value={formData.currency_id}
+                  onChange={(e) => handleChange(null, 'currency_id', e.target.value)}
                 >
                   <option value="ARS">ARS - Peso Argentino</option>
                   <option value="USD">USD - Dólar</option>
@@ -175,67 +202,27 @@ function PaymentForm({ onSuccess }) {
                 <label>Referencia Externa</label>
                 <input
                   type="text"
-                  value={formData.externalReference}
-                  onChange={(e) => handleChange(null, 'externalReference', e.target.value)}
+                  value={formData.external_reference}
+                  onChange={(e) => handleChange(null, 'external_reference', e.target.value)}
                   placeholder="ORDER-12345"
                 />
               </div>
               <div className="form-group">
-                <label>Descripción</label>
+                <label>ID de Concepto</label>
                 <input
                   type="text"
-                  value={formData.description}
-                  onChange={(e) => handleChange(null, 'description', e.target.value)}
-                  placeholder="Descripción del pago"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Datos del Pagador */}
-          <div className="form-section">
-            <h3 className="form-section-title">Datos del Pagador</h3>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Nombre Completo</label>
-                <input
-                  type="text"
-                  value={formData.payer.name}
-                  onChange={(e) => handleChange('payer', 'name', e.target.value)}
-                  placeholder="Juan Pérez"
-                  required
+                  value={formData.concept_id}
+                  onChange={(e) => handleChange(null, 'concept_id', e.target.value)}
+                  placeholder="prueba"
                 />
               </div>
               <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={formData.payer.email}
-                  onChange={(e) => handleChange('payer', 'email', e.target.value)}
-                  placeholder="juan@email.com"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Tipo de Documento</label>
-                <select
-                  value={formData.payer.documentType}
-                  onChange={(e) => handleChange('payer', 'documentType', e.target.value)}
-                >
-                  <option value="DNI">DNI</option>
-                  <option value="CUIT">CUIT</option>
-                  <option value="CUIL">CUIL</option>
-                  <option value="PASSPORT">Pasaporte</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Número de Documento</label>
+                <label>Descripción del Concepto</label>
                 <input
                   type="text"
-                  value={formData.payer.documentNumber}
-                  onChange={(e) => handleChange('payer', 'documentNumber', e.target.value)}
-                  placeholder="12345678"
-                  required
+                  value={formData.concept_description}
+                  onChange={(e) => handleChange(null, 'concept_description', e.target.value)}
+                  placeholder="Concepto de prueba"
                 />
               </div>
             </div>
@@ -246,37 +233,51 @@ function PaymentForm({ onSuccess }) {
             <h3 className="form-section-title">Método de Pago</h3>
             <div className="form-grid">
               <div className="form-group">
-                <label>Tipo</label>
-                <select
-                  value={formData.paymentMethod.type}
-                  onChange={(e) => handleChange('paymentMethod', 'type', e.target.value)}
-                >
-                  <option value="credit_card">Tarjeta de Crédito</option>
-                  <option value="debit_card">Tarjeta de Débito</option>
-                  <option value="bank_transfer">Transferencia Bancaria</option>
-                  <option value="cash">Efectivo</option>
-                </select>
+                <label>ID de Medio de Pago</label>
+                <input
+                  type="number"
+                  value={formData.media_payment_id}
+                  onChange={(e) => handleChange(null, 'media_payment_id', parseInt(e.target.value))}
+                  placeholder="9"
+                />
               </div>
               <div className="form-group">
-                <label>Marca</label>
-                <select
-                  value={formData.paymentMethod.brand}
-                  onChange={(e) => handleChange('paymentMethod', 'brand', e.target.value)}
-                >
-                  <option value="visa">Visa</option>
-                  <option value="mastercard">Mastercard</option>
-                  <option value="amex">American Express</option>
-                  <option value="cabal">Cabal</option>
-                </select>
+                <label>Detalle del Medio de Pago</label>
+                <input
+                  type="text"
+                  value={formData.media_payment_detail}
+                  onChange={(e) => handleChange(null, 'media_payment_detail', e.target.value)}
+                  placeholder="VISA CREDIT"
+                />
               </div>
               <div className="form-group">
                 <label>Últimos 4 dígitos</label>
                 <input
                   type="text"
                   maxLength="4"
-                  value={formData.paymentMethod.lastFourDigits}
-                  onChange={(e) => handleChange('paymentMethod', 'lastFourDigits', e.target.value)}
-                  placeholder="4242"
+                  value={formData.last_four_digits}
+                  onChange={(e) => handleChange(null, 'last_four_digits', e.target.value)}
+                  placeholder="0010"
+                />
+              </div>
+              <div className="form-group">
+                <label>Primeros 6 dígitos</label>
+                <input
+                  type="text"
+                  maxLength="6"
+                  value={formData.first_six_digits}
+                  onChange={(e) => handleChange(null, 'first_six_digits', e.target.value)}
+                  placeholder="450799"
+                />
+              </div>
+              <div className="form-group">
+                <label>Cuotas</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.installments}
+                  onChange={(e) => handleChange(null, 'installments', parseInt(e.target.value))}
+                  placeholder="1"
                 />
               </div>
             </div>
@@ -371,18 +372,18 @@ function PaymentForm({ onSuccess }) {
                 </h3>
                 <p className="result-message">{result.responseMessage}</p>
                 <div className="result-transaction">
-                  {result.transactionId}
+                  {result.external_transaction_id || result.id}
                 </div>
-                {result.paymentMethod?.panToken && (
+                {result.payment_methods?.[0]?.panToken && (
                   <p style={{ fontSize: '0.8rem', color: 'var(--gray-600)', marginTop: '0.5rem' }}>
-                    PAN Token: <code>{result.paymentMethod.panToken}</code>
+                    PAN Token: <code>{result.payment_methods[0].panToken}</code>
                   </p>
                 )}
                 <div className="result-amount">
-                  {formatCurrency(result.amount, result.currency)}
+                  {formatCurrency(result.final_amount, result.currency_id)}
                 </div>
                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)' }}>
-                  Código: {result.responseCode}
+                  {result.status_detail || `Estado: ${result.status}`}
                 </p>
                 {result.sqsSent && (
                   <p style={{ fontSize: '0.875rem', color: 'var(--success)', marginTop: '0.5rem' }}>

@@ -7,7 +7,7 @@ function PaymentList() {
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 })
   const [filters, setFilters] = useState({
     status: '',
-    merchantId: '',
+    collectorId: '',
     page: 1
   })
 
@@ -19,11 +19,11 @@ function PaymentList() {
     setLoading(true)
     try {
       const params = {
-        page: filters.page,
+        skip: (filters.page - 1) * 10,
         limit: 10
       }
       if (filters.status) params.status = filters.status
-      if (filters.merchantId) params.merchantId = filters.merchantId
+      if (filters.collectorId) params.collector_id = filters.collectorId
 
       const response = await getPayments(params)
       setPayments(response.data)
@@ -96,9 +96,9 @@ function PaymentList() {
         </select>
         <input
           type="text"
-          placeholder="ID Comercio..."
-          value={filters.merchantId}
-          onChange={(e) => handleFilterChange('merchantId', e.target.value)}
+          placeholder="ID Colector..."
+          value={filters.collectorId}
+          onChange={(e) => handleFilterChange('collectorId', e.target.value)}
         />
         <button className="btn btn-secondary" onClick={fetchPayments}>
           🔄 Actualizar
@@ -122,8 +122,7 @@ function PaymentList() {
                 <tr>
                   <th>ID Transacción</th>
                   <th>Fecha</th>
-                  <th>Comercio</th>
-                  <th>Pagador</th>
+                  <th>Colector</th>
                   <th>Monto</th>
                   <th>Estado</th>
                   <th>Notificado</th>
@@ -131,23 +130,18 @@ function PaymentList() {
               </thead>
               <tbody>
                 {payments.map((payment) => (
-                  <tr key={payment.transactionId}>
+                  <tr key={payment.id || payment.external_transaction_id}>
                     <td>
-                      <code style={{ fontSize: '0.75rem' }}>{payment.transactionId}</code>
+                      <code style={{ fontSize: '0.75rem' }}>{payment.external_transaction_id || payment.id}</code>
                     </td>
-                    <td>{formatDate(payment.createdAt)}</td>
+                    <td>{formatDate(payment.request_date || payment.createdAt)}</td>
                     <td>
-                      <strong>{payment.merchant.name}</strong>
+                      <strong>{payment.collector_detail?.name || 'N/A'}</strong>
                       <br />
-                      <small style={{ color: 'var(--gray-500)' }}>{payment.merchant.id}</small>
+                      <small style={{ color: 'var(--gray-500)' }}>{payment.collector_id}</small>
                     </td>
                     <td>
-                      {payment.payer.name}
-                      <br />
-                      <small style={{ color: 'var(--gray-500)' }}>{payment.payer.email}</small>
-                    </td>
-                    <td>
-                      <strong>{formatCurrency(payment.amount, payment.currency)}</strong>
+                      <strong>{formatCurrency(payment.final_amount, payment.currency_id)}</strong>
                     </td>
                     <td>{getStatusBadge(payment.status)}</td>
                     <td>
@@ -172,7 +166,7 @@ function PaymentList() {
               ← Anterior
             </button>
             <span>
-              Página {pagination.page} de {pagination.pages} ({pagination.total} registros)
+              Página {filters.page} de {pagination.pages} ({pagination.total} registros)
             </span>
             <button
               disabled={filters.page >= pagination.pages}
