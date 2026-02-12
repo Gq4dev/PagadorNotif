@@ -34,24 +34,24 @@ function Dashboard() {
     try {
       // Fetch all payments for stats
       const [allPayments, approvedPayments, rejectedPayments, pendingPayments] = await Promise.all([
-        getPayments({ limit: 1000 }),
-        getPayments({ status: 'approved', limit: 1000 }),
-        getPayments({ status: 'rejected', limit: 1000 }),
-        getPayments({ notificationSent: 'false', limit: 1000 })
+        getPayments({ limit: 1000, skip: 0 }),
+        getPayments({ status: 'approved', limit: 1000, skip: 0 }),
+        getPayments({ status: 'rejected', limit: 1000, skip: 0 }),
+        getPayments({ status: 'pending', limit: 1000, skip: 0 })
       ])
 
-      const totalAmount = approvedPayments.data.reduce((sum, p) => sum + p.amount, 0)
+      const totalAmount = (approvedPayments.data || []).reduce((sum, p) => sum + (p.final_amount || 0), 0)
 
       setStats({
-        total: allPayments.pagination.total,
-        approved: approvedPayments.pagination.total,
-        rejected: rejectedPayments.pagination.total,
-        pending: pendingPayments.data.filter(p => p.status === 'pending').length,
+        total: allPayments.pagination?.total || (allPayments.data || []).length,
+        approved: approvedPayments.pagination?.total || (approvedPayments.data || []).length,
+        rejected: rejectedPayments.pagination?.total || (rejectedPayments.data || []).length,
+        pending: (pendingPayments.data || []).filter(p => p.status === 'pending').length,
         totalAmount,
-        pendingNotifications: pendingPayments.pagination.total
+        pendingNotifications: pendingPayments.pagination?.total || (pendingPayments.data || []).filter(p => !p.notificationSent).length
       })
 
-      setRecentPayments(allPayments.data.slice(0, 5))
+      setRecentPayments((allPayments.data || []).slice(0, 5))
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     } finally {
@@ -139,8 +139,9 @@ function Dashboard() {
     const statusConfig = {
       approved: { class: 'status-approved', icon: '✅', label: 'Aprobado' },
       rejected: { class: 'status-rejected', icon: '❌', label: 'Rechazado' },
-      pending: { class: 'status-pending', icon: '⏳', label: 'En proceso' },
-      refunded: { class: 'status-refunded', icon: '↩️', label: 'Reembolsado' }
+      pending: { class: 'status-pending', icon: '⚠️', label: 'En proceso' },
+      refunded: { class: 'status-refunded', icon: '↩️', label: 'Reembolsado' },
+      cancelled: { class: 'status-refunded', icon: '🚫', label: 'Cancelado' }
     }
     const config = statusConfig[status] || statusConfig.pending
     return (
@@ -246,7 +247,7 @@ function Dashboard() {
         )}
         {bulk1000Result && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulk1000Result.total} pagos creados · {bulk1000Result.approved} aprobados · {bulk1000Result.rejected} rechazados · <strong>{bulk1000Result.notificationsSent} notificaciones enviadas a AWS</strong>
+            <strong>✅ Resultado:</strong> {bulk1000Result.created || bulk1000Result.length} pagos creados · <strong>{bulk1000Result.notificationsSent || 0} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>
@@ -279,7 +280,7 @@ function Dashboard() {
         )}
         {bulk5000Result && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulk5000Result.total} pagos creados · {bulk5000Result.approved} aprobados · {bulk5000Result.rejected} rechazados · <strong>{bulk5000Result.notificationsSent} notificaciones enviadas a AWS</strong>
+            <strong>✅ Resultado:</strong> {bulk5000Result.created || bulk5000Result.length} pagos creados · <strong>{bulk5000Result.notificationsSent || 0} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>
@@ -312,7 +313,7 @@ function Dashboard() {
         )}
         {bulkApprovedResult && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulkApprovedResult.total} pagos creados · <strong>{bulkApprovedResult.withPanToken} con panToken</strong> · {bulkApprovedResult.withoutPanToken} sin panToken · <strong>{bulkApprovedResult.notificationsSent} notificaciones enviadas a AWS</strong>
+            <strong>✅ Resultado:</strong> {bulkApprovedResult.created || bulkApprovedResult.length} pagos creados · <strong>{bulkApprovedResult.notificationsSent || 0} notificaciones enviadas a AWS</strong>
           </div>
         )}
       </div>
@@ -345,7 +346,7 @@ function Dashboard() {
         )}
         {bulkDuplicatesResult && (
           <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--gray-50)', borderRadius: '8px', fontSize: '0.9rem' }}>
-            <strong>✅ Resultado:</strong> {bulkDuplicatesResult.total} pagos creados · <strong>{bulkDuplicatesResult.notificationsSent} notificaciones enviadas</strong> (incluye {bulkDuplicatesResult.duplicates} duplicados: 1 normal + 1 con is_force=true) · Payment ID duplicado: <code style={{ fontSize: '0.8rem' }}>{bulkDuplicatesResult.duplicatePaymentId}</code>
+            <strong>✅ Resultado:</strong> {bulkDuplicatesResult.created || bulkDuplicatesResult.length} pagos creados · <strong>{bulkDuplicatesResult.notificationsSent || 0} notificaciones enviadas</strong> (incluye duplicado: 1 normal + 1 con is_force=true) · Payment ID duplicado: <code style={{ fontSize: '0.8rem' }}>{bulkDuplicatesResult.duplicatePaymentId || 'N/A'}</code>
           </div>
         )}
       </div>
@@ -373,19 +374,26 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentPayments.map((payment) => (
-                  <tr key={payment.transactionId}>
-                    <td>
-                      <code style={{ fontSize: '0.7rem' }}>
-                        {payment.transactionId.substring(0, 20)}...
-                      </code>
-                    </td>
-                    <td>{formatDate(payment.createdAt)}</td>
-                    <td>{payment.merchant.name}</td>
-                    <td><strong>{formatCurrency(payment.amount)}</strong></td>
-                    <td>{getStatusBadge(payment.status)}</td>
-                  </tr>
-                ))}
+                {recentPayments.map((payment) => {
+                  const paymentId = payment.external_transaction_id || payment.id || payment.transactionId || 'N/A';
+                  const paymentDate = payment.request_date || payment.createdAt || new Date();
+                  const collectorName = payment.collector_detail?.name || 'N/A';
+                  const amount = payment.final_amount || 0;
+                  
+                  return (
+                    <tr key={paymentId}>
+                      <td>
+                        <code style={{ fontSize: '0.7rem' }}>
+                          {paymentId.length > 20 ? `${paymentId.substring(0, 20)}...` : paymentId}
+                        </code>
+                      </td>
+                      <td>{formatDate(paymentDate)}</td>
+                      <td>{collectorName}</td>
+                      <td><strong>{formatCurrency(amount)}</strong></td>
+                      <td>{getStatusBadge(payment.status)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
