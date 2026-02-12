@@ -777,7 +777,7 @@ exports.createBulkTestPayments = async (req, res) => {
         review: false,
         collector_id: '999',
         collector_detail: { name: 'PRUEBA' },
-        notification_url: null,
+        notification_url: 'https://comerciowebhook.onrender.com/webhook',
         form_url: null,
         details: [{
           amount: finalAmount,
@@ -885,7 +885,7 @@ exports.createBulkTestPaymentsApproved = async (req, res) => {
         review: false,
         collector_id: '999',
         collector_detail: { name: 'PRUEBA' },
-        notification_url: null,
+        notification_url: 'https://comerciowebhook.onrender.com/webhook',
         form_url: null,
         details: [{
           amount,
@@ -981,7 +981,7 @@ exports.createBulkTestWithDuplicates = async (req, res) => {
         review: false,
         collector_id: '999',
         collector_detail: { name: 'PRUEBA' },
-        notification_url: null,
+        notification_url: 'https://comerciowebhook.onrender.com/webhook',
         form_url: null,
         details: [{
           amount,

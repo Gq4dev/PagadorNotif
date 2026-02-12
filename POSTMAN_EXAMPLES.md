@@ -14,27 +14,32 @@ http://localhost:3000/api/payments
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchant": {
-      "id": "MERCHANT-001",
-      "name": "Mi Tienda Online",
-      "email": "pagos@mitienda.com",
-      "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "amount": 1500.00,
-    "currency": "ARS",
-    "payer": {
-      "name": "Juan Pérez",
-      "email": "juan.perez@email.com",
-      "documentType": "DNI",
-      "documentNumber": "12345678"
-    },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "visa",
-      "lastFourDigits": "4242"
-    },
-    "externalReference": "ORDER-12345",
-    "description": "Compra en Mi Tienda Online",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 1500.0,
+      "external_reference": "ORDER-12345",
+      "concept_id": "prueba",
+      "concept_description": "Concepto de prueba"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 1500.0,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "4242",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "payment_method_id": 0
+    }],
+    "final_amount": 1500.0,
     "sqsAttributes": {
       "allow_commerce_pan_token": "true",
       "from_batch": "false",
@@ -55,27 +60,32 @@ Content-Type: application/json
 **Body (JSON):**
 ```json
 {
-  "merchant": {
-    "id": "MERCHANT-001",
-    "name": "Mi Tienda Online",
-    "email": "pagos@mitienda.com",
-    "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+  "type": "debit",
+  "validation": false,
+  "review": false,
+  "collector_id": "999",
+  "collector_detail": {
+    "name": "PRUEBA"
   },
-  "amount": 1500.00,
-  "currency": "ARS",
-  "payer": {
-    "name": "Juan Pérez",
-    "email": "juan.perez@email.com",
-    "documentType": "DNI",
-    "documentNumber": "12345678"
-  },
-  "paymentMethod": {
-    "type": "credit_card",
-    "brand": "visa",
-    "lastFourDigits": "4242"
-  },
-  "externalReference": "ORDER-12345",
-  "description": "Compra en Mi Tienda Online",
+  "notification_url": "https://comerciowebhook.onrender.com/webhook",
+  "form_url": null,
+  "details": [{
+    "amount": 1500.0,
+    "external_reference": "ORDER-12345",
+    "concept_id": "prueba",
+    "concept_description": "Concepto de prueba"
+  }],
+  "currency_id": "ARS",
+  "payment_methods": [{
+    "amount": 1500.0,
+    "media_payment_id": 9,
+    "media_payment_detail": "VISA CREDIT",
+    "last_four_digits": "4242",
+    "first_six_digits": "450799",
+    "installments": 1,
+    "payment_method_id": 0
+  }],
+  "final_amount": 1500.0,
   "sqsAttributes": {
     "allow_commerce_pan_token": "true",
     "from_batch": "false",
@@ -84,7 +94,7 @@ Content-Type: application/json
 }
 ```
 
-**Nota:** Los tokens (token, tokenId, panToken, commerceToken) se generan automáticamente.
+**Nota:** Los tokens (token, tokenId, panToken, commerceToken) y códigos de autorización se generan automáticamente.
 
 ---
 
@@ -95,27 +105,32 @@ Content-Type: application/json
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchant": {
-      "id": "MERCHANT-002",
-      "name": "Comercio Test",
-      "email": "test@comercio.com",
-      "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "amount": 2500.00,
-    "currency": "ARS",
-    "payer": {
-      "name": "María García",
-      "email": "maria@email.com",
-      "documentType": "DNI",
-      "documentNumber": "87654321"
-    },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "mastercard",
-      "lastFourDigits": "5555"
-    },
-    "externalReference": "ORDER-67890",
-    "description": "Pago sin panToken",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 2500.0,
+      "external_reference": "ORDER-67890",
+      "concept_id": "prueba",
+      "concept_description": "Concepto de prueba sin panToken"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 2500.0,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "5555",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "payment_method_id": 0
+    }],
+    "final_amount": 2500.0,
     "sqsAttributes": {
       "allow_commerce_pan_token": "false",
       "from_batch": "false",
@@ -136,27 +151,32 @@ Content-Type: application/json
 **Body (JSON):**
 ```json
 {
-  "merchant": {
-    "id": "MERCHANT-002",
-    "name": "Comercio Test",
-    "email": "test@comercio.com",
-    "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+  "type": "debit",
+  "validation": false,
+  "review": false,
+  "collector_id": "999",
+  "collector_detail": {
+    "name": "PRUEBA"
   },
-  "amount": 2500.00,
-  "currency": "ARS",
-  "payer": {
-    "name": "María García",
-    "email": "maria@email.com",
-    "documentType": "DNI",
-    "documentNumber": "87654321"
-  },
-  "paymentMethod": {
-    "type": "credit_card",
-    "brand": "mastercard",
-    "lastFourDigits": "5555"
-  },
-  "externalReference": "ORDER-67890",
-  "description": "Pago sin panToken",
+  "notification_url": "https://comerciowebhook.onrender.com/webhook",
+  "form_url": null,
+  "details": [{
+    "amount": 2500.0,
+    "external_reference": "ORDER-67890",
+    "concept_id": "prueba",
+    "concept_description": "Concepto de prueba sin panToken"
+  }],
+  "currency_id": "ARS",
+  "payment_methods": [{
+    "amount": 2500.0,
+    "media_payment_id": 9,
+    "media_payment_detail": "VISA CREDIT",
+    "last_four_digits": "5555",
+    "first_six_digits": "450799",
+    "installments": 1,
+    "payment_method_id": 0
+  }],
+  "final_amount": 2500.0,
   "sqsAttributes": {
     "allow_commerce_pan_token": "false",
     "from_batch": "false",
@@ -174,27 +194,32 @@ Content-Type: application/json
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchant": {
-      "id": "MERCHANT-001",
-      "name": "Mi Tienda Online",
-      "email": "pagos@mitienda.com",
-      "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "amount": 1999.99,
-    "currency": "ARS",
-    "payer": {
-      "name": "Carlos López",
-      "email": "carlos@email.com",
-      "documentType": "DNI",
-      "documentNumber": "11223344"
-    },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "visa",
-      "lastFourDigits": "1234"
-    },
-    "externalReference": "ORDER-REJECTED-001",
-    "description": "Pago que será rechazado",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 1999.99,
+      "external_reference": "ORDER-REJECTED-001",
+      "concept_id": "prueba",
+      "concept_description": "Pago que será rechazado"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 1999.99,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "1234",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "payment_method_id": 0
+    }],
+    "final_amount": 1999.99,
     "sqsAttributes": {
       "allow_commerce_pan_token": "true",
       "from_batch": "false",
@@ -215,27 +240,32 @@ Content-Type: application/json
 **Body (JSON):**
 ```json
 {
-  "merchant": {
-    "id": "MERCHANT-001",
-    "name": "Mi Tienda Online",
-    "email": "pagos@mitienda.com",
-    "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+  "type": "debit",
+  "validation": false,
+  "review": false,
+  "collector_id": "999",
+  "collector_detail": {
+    "name": "PRUEBA"
   },
-  "amount": 1999.99,
-  "currency": "ARS",
-  "payer": {
-    "name": "Carlos López",
-    "email": "carlos@email.com",
-    "documentType": "DNI",
-    "documentNumber": "11223344"
-  },
-  "paymentMethod": {
-    "type": "credit_card",
-    "brand": "visa",
-    "lastFourDigits": "1234"
-  },
-  "externalReference": "ORDER-REJECTED-001",
-  "description": "Pago que será rechazado",
+  "notification_url": "https://comerciowebhook.onrender.com/webhook",
+  "form_url": null,
+  "details": [{
+    "amount": 1999.99,
+    "external_reference": "ORDER-REJECTED-001",
+    "concept_id": "prueba",
+    "concept_description": "Pago que será rechazado"
+  }],
+  "currency_id": "ARS",
+  "payment_methods": [{
+    "amount": 1999.99,
+    "media_payment_id": 9,
+    "media_payment_detail": "VISA CREDIT",
+    "last_four_digits": "1234",
+    "first_six_digits": "450799",
+    "installments": 1,
+    "payment_method_id": 0
+  }],
+  "final_amount": 1999.99,
   "sqsAttributes": {
     "allow_commerce_pan_token": "true",
     "from_batch": "false",
@@ -255,27 +285,32 @@ Content-Type: application/json
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchant": {
-      "id": "MERCHANT-001",
-      "name": "Mi Tienda Online",
-      "email": "pagos@mitienda.com",
-      "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "amount": 1050.50,
-    "currency": "ARS",
-    "payer": {
-      "name": "Ana Martínez",
-      "email": "ana@email.com",
-      "documentType": "DNI",
-      "documentNumber": "55667788"
-    },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "mastercard",
-      "lastFourDigits": "9999"
-    },
-    "externalReference": "ORDER-PENDING-001",
-    "description": "Pago que quedará en proceso",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 1050.50,
+      "external_reference": "ORDER-PENDING-001",
+      "concept_id": "prueba",
+      "concept_description": "Pago que quedará en proceso"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 1050.50,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "9999",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "payment_method_id": 0
+    }],
+    "final_amount": 1050.50,
     "sqsAttributes": {
       "allow_commerce_pan_token": "true",
       "from_batch": "false",
@@ -296,27 +331,32 @@ Content-Type: application/json
 **Body (JSON):**
 ```json
 {
-  "merchant": {
-    "id": "MERCHANT-001",
-    "name": "Mi Tienda Online",
-    "email": "pagos@mitienda.com",
-    "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+  "type": "debit",
+  "validation": false,
+  "review": false,
+  "collector_id": "999",
+  "collector_detail": {
+    "name": "PRUEBA"
   },
-  "amount": 1050.50,
-  "currency": "ARS",
-  "payer": {
-    "name": "Ana Martínez",
-    "email": "ana@email.com",
-    "documentType": "DNI",
-    "documentNumber": "55667788"
-  },
-  "paymentMethod": {
-    "type": "credit_card",
-    "brand": "mastercard",
-    "lastFourDigits": "9999"
-  },
-  "externalReference": "ORDER-PENDING-001",
-  "description": "Pago que quedará en proceso",
+  "notification_url": "https://comerciowebhook.onrender.com/webhook",
+  "form_url": null,
+  "details": [{
+    "amount": 1050.50,
+    "external_reference": "ORDER-PENDING-001",
+    "concept_id": "prueba",
+    "concept_description": "Pago que quedará en proceso"
+  }],
+  "currency_id": "ARS",
+  "payment_methods": [{
+    "amount": 1050.50,
+    "media_payment_id": 9,
+    "media_payment_detail": "VISA CREDIT",
+    "last_four_digits": "9999",
+    "first_six_digits": "450799",
+    "installments": 1,
+    "payment_method_id": 0
+  }],
+  "final_amount": 1050.50,
   "sqsAttributes": {
     "allow_commerce_pan_token": "true",
     "from_batch": "false",
@@ -336,27 +376,32 @@ Content-Type: application/json
 curl -X POST http://localhost:3000/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "merchant": {
-      "id": "MERCHANT-001",
-      "name": "Mi Tienda Online",
-      "email": "pagos@mitienda.com",
-      "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "amount": 5000.00,
-    "currency": "ARS",
-    "payer": {
-      "name": "Luis Rodríguez",
-      "email": "luis@email.com",
-      "documentType": "DNI",
-      "documentNumber": "99887766"
-    },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "visa",
-      "lastFourDigits": "8888"
-    },
-    "externalReference": "ORDER-FORCE-001",
-    "description": "Pago con is_force activado",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 5000.0,
+      "external_reference": "ORDER-FORCE-001",
+      "concept_id": "prueba",
+      "concept_description": "Pago con is_force activado"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 5000.0,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "8888",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "payment_method_id": 0
+    }],
+    "final_amount": 5000.0,
     "sqsAttributes": {
       "allow_commerce_pan_token": "true",
       "from_batch": "true",
@@ -377,27 +422,32 @@ Content-Type: application/json
 **Body (JSON):**
 ```json
 {
-  "merchant": {
-    "id": "MERCHANT-001",
-    "name": "Mi Tienda Online",
-    "email": "pagos@mitienda.com",
-    "notificationUrl": "https://comerciowebhook.onrender.com/webhook"
+  "type": "debit",
+  "validation": false,
+  "review": false,
+  "collector_id": "999",
+  "collector_detail": {
+    "name": "PRUEBA"
   },
-  "amount": 5000.00,
-  "currency": "ARS",
-  "payer": {
-    "name": "Luis Rodríguez",
-    "email": "luis@email.com",
-    "documentType": "DNI",
-    "documentNumber": "99887766"
-  },
-  "paymentMethod": {
-    "type": "credit_card",
-    "brand": "visa",
-    "lastFourDigits": "8888"
-  },
-  "externalReference": "ORDER-FORCE-001",
-  "description": "Pago con is_force activado",
+  "notification_url": "https://comerciowebhook.onrender.com/webhook",
+  "form_url": null,
+  "details": [{
+    "amount": 5000.0,
+    "external_reference": "ORDER-FORCE-001",
+    "concept_id": "prueba",
+    "concept_description": "Pago con is_force activado"
+  }],
+  "currency_id": "ARS",
+  "payment_methods": [{
+    "amount": 5000.0,
+    "media_payment_id": 9,
+    "media_payment_detail": "VISA CREDIT",
+    "last_four_digits": "8888",
+    "first_six_digits": "450799",
+    "installments": 1,
+    "payment_method_id": 0
+  }],
+  "final_amount": 5000.0,
   "sqsAttributes": {
     "allow_commerce_pan_token": "true",
     "from_batch": "true",
@@ -416,10 +466,10 @@ Content-Type: application/json
 curl -X GET "http://localhost:3000/api/payments"
 
 # Filtrar por estado aprobado
-curl -X GET "http://localhost:3000/api/payments?status=approved&page=1&limit=10"
+curl -X GET "http://localhost:3000/api/payments?status=approved&skip=0&limit=10"
 
-# Filtrar por comercio
-curl -X GET "http://localhost:3000/api/payments?merchantId=MERCHANT-001&page=1&limit=20"
+# Filtrar por colector
+curl -X GET "http://localhost:3000/api/payments?collector_id=999&skip=0&limit=20"
 ```
 
 ### Postman
@@ -428,14 +478,14 @@ curl -X GET "http://localhost:3000/api/payments?merchantId=MERCHANT-001&page=1&l
 **URL:** `http://localhost:3000/api/payments`  
 **Query Params (opcionales):**
 - `status`: `approved`, `rejected`, `pending`, `refunded`, `cancelled`
-- `merchantId`: `MERCHANT-001`
-- `notificationSent`: `true` o `false`
-- `page`: `1`
-- `limit`: `20`
+- `collector_id`: `999`
+- `skip`: `0` (para paginación)
+- `limit`: `20` (número de resultados)
+- `sort`: `-createdAt` (ordenar por fecha descendente)
 
 **Ejemplo:**
 ```
-GET http://localhost:3000/api/payments?status=approved&page=1&limit=10
+GET http://localhost:3000/api/payments?status=approved&skip=0&limit=10
 ```
 
 ---
@@ -444,17 +494,17 @@ GET http://localhost:3000/api/payments?status=approved&page=1&limit=10
 
 ### cURL
 ```bash
-curl -X GET "http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4"
+curl -X GET "http://localhost:3000/api/payments/{external_transaction_id}"
 ```
 
 ### Postman
 
 **Método:** `GET`  
-**URL:** `http://localhost:3000/api/payments/{transactionId}`
+**URL:** `http://localhost:3000/api/payments/{external_transaction_id}`
 
 **Ejemplo:**
 ```
-GET http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4
+GET http://localhost:3000/api/payments/c189ad3d-f5e7-4d33-a92e-09adcb9273ed
 ```
 
 ---
@@ -469,11 +519,11 @@ GET http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4
 ## 9. Marcar Pago como Notificado
 
 **Método:** `PATCH`  
-**URL:** `http://localhost:3000/api/payments/{transactionId}/notified`
+**URL:** `http://localhost:3000/api/payments/{external_transaction_id}/notified`
 
 **Ejemplo:**
 ```
-PATCH http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4/notified
+PATCH http://localhost:3000/api/payments/c189ad3d-f5e7-4d33-a92e-09adcb9273ed/notified
 ```
 
 ---
@@ -481,11 +531,11 @@ PATCH http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4/notified
 ## 10. Reembolsar Pago
 
 **Método:** `POST`  
-**URL:** `http://localhost:3000/api/payments/{transactionId}/refund`
+**URL:** `http://localhost:3000/api/payments/{external_transaction_id}/refund`
 
 **Ejemplo:**
 ```
-POST http://localhost:3000/api/payments/TXN-1738535780000-A1B2C3D4/refund
+POST http://localhost:3000/api/payments/c189ad3d-f5e7-4d33-a92e-09adcb9273ed/refund
 ```
 
 ---
@@ -552,7 +602,7 @@ curl -X POST "http://localhost:3000/api/payments/bulk/test-duplicates"
 |------------------|-----------|
 | `.00` | ✅ Siempre **aprobado** |
 | `.99` | ❌ Siempre **rechazado** |
-| `.50` | ⏳ Siempre **pending** |
+| `.50` | ⚠️ Siempre **pending** |
 | Otro | 🎲 80% aprobado, 15% rechazado, 5% pending |
 
 ---
@@ -563,27 +613,61 @@ curl -X POST "http://localhost:3000/api/payments/bulk/test-duplicates"
 {
   "success": true,
   "data": {
-    "transactionId": "TXN-1738535780000-A1B2C3D4",
-    "status": "approved",
-    "responseCode": "00",
-    "responseMessage": "Transacción aprobada",
-    "amount": 1500,
-    "currency": "ARS",
-    "merchant": {
-      "id": "MERCHANT-001",
-      "name": "Mi Tienda Online"
+    "type": "debit",
+    "validation": false,
+    "review": false,
+    "id": "554ecb4a-aec5-439f-b506-9a22215e0746",
+    "external_transaction_id": "c189ad3d-f5e7-4d33-a92e-09adcb9273ed",
+    "collector_id": "999",
+    "collector_detail": {
+      "name": "PRUEBA"
     },
-    "paymentMethod": {
-      "type": "credit_card",
-      "brand": "visa",
-      "lastFourDigits": "4242",
+    "notification_url": "https://comerciowebhook.onrender.com/webhook",
+    "form_url": null,
+    "details": [{
+      "amount": 1500.0,
+      "external_reference": "ORDER-12345",
+      "concept_id": "prueba",
+      "concept_description": "Concepto de prueba"
+    }],
+    "currency_id": "ARS",
+    "payment_methods": [{
+      "amount": 1500.0,
+      "media_payment_id": 9,
+      "media_payment_detail": "VISA CREDIT",
+      "last_four_digits": "4242",
+      "first_six_digits": "450799",
+      "installments": 1,
+      "authorization_code": "191780",
+      "gateway": {
+        "establishment_number": "PRUEBA",
+        "transaction_id": "4021606",
+        "batch_number": "1",
+        "ticket_number": "1533",
+        "ppt_owner": false
+      },
+      "payment_method_id": 0,
       "token": "tok_xxxxxxxxxxxxxxxxxxxxxxxx",
       "tokenId": "uuid-...",
       "panToken": "pan_tok_visa_XXXX-XXXX-XXXX",
       "commerceToken": "com_xxxxxxxxxxxxxxxxxxxx"
-    },
-    "createdAt": "2026-02-02T15:00:00.000Z",
-    "notificationSent": true
+    }],
+    "final_amount": 1500.0,
+    "status": "approved",
+    "status_detail": "APROBADA - Autorizada - MOP GPAY: -1 - Aprobada",
+    "request_date": "2019-08-06T14:58:25-0300",
+    "due_date": "2019-08-06T14:58:25-0300",
+    "last_due_date": "2019-08-06T14:58:25-0300",
+    "process_date": "2019-08-06T14:58:25-0300",
+    "paid_date": "2019-08-06T14:58:25-0300",
+    "accreditation_date": "2019-08-06T14:58:25-0300",
+    "last_update_date": "2019-08-06T14:58:25-0300",
+    "metadata": {},
+    "source": {
+      "id": "ee84ca67-5f90-4ca9-b587-37afce6ecc14",
+      "name": "system-test",
+      "type": "system"
+    }
   }
 }
 ```
