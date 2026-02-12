@@ -287,8 +287,50 @@ paymentSchema.index({ notificationSent: 1, status: 1 });
 paymentSchema.index({ id: 1 });
 paymentSchema.index({ external_transaction_id: 1 });
 
-// Método para convertir a formato JSON estándar
+// Función auxiliar para formatear fecha con timezone
+const formatDateWithTimezone = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  const offset = -d.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const hours = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0');
+  const minutes = (Math.abs(offset) % 60).toString().padStart(2, '0');
+  const timezone = `${sign}${hours}${minutes}`;
+  
+  const year = d.getFullYear();
+  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+  const day = d.getDate().toString().padStart(2, '0');
+  const hour = d.getHours().toString().padStart(2, '0');
+  const minute = d.getMinutes().toString().padStart(2, '0');
+  const second = d.getSeconds().toString().padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${timezone}`;
+};
+
+// Método para convertir a formato JSON estándar (estructura final)
 paymentSchema.methods.toPaymentJSON = function() {
+  // Limpiar payment_methods para no incluir campos internos (token, tokenId, panToken, commerceToken)
+  // a menos que estén presentes en el modelo final
+  const cleanedPaymentMethods = this.payment_methods.map(pm => {
+    const cleaned = {
+      amount: pm.amount,
+      media_payment_id: pm.media_payment_id,
+      media_payment_detail: pm.media_payment_detail,
+      last_four_digits: pm.last_four_digits,
+      first_six_digits: pm.first_six_digits,
+      installments: pm.installments,
+      authorization_code: pm.authorization_code,
+      gateway: pm.gateway,
+      payment_method_id: pm.payment_method_id
+    };
+    // Solo incluir tokens si existen (para compatibilidad con el sistema actual)
+    if (pm.token) cleaned.token = pm.token;
+    if (pm.tokenId) cleaned.tokenId = pm.tokenId;
+    if (pm.panToken) cleaned.panToken = pm.panToken;
+    if (pm.commerceToken) cleaned.commerceToken = pm.commerceToken;
+    return cleaned;
+  });
+
   return {
     type: this.type,
     validation: this.validation,
@@ -301,17 +343,17 @@ paymentSchema.methods.toPaymentJSON = function() {
     form_url: this.form_url,
     details: this.details,
     currency_id: this.currency_id,
-    payment_methods: this.payment_methods,
+    payment_methods: cleanedPaymentMethods,
     final_amount: this.final_amount,
     status: this.status,
     status_detail: this.status_detail,
-    request_date: this.request_date ? this.request_date.toISOString() : null,
-    due_date: this.due_date ? this.due_date.toISOString() : null,
-    last_due_date: this.last_due_date ? this.last_due_date.toISOString() : null,
-    process_date: this.process_date ? this.process_date.toISOString() : null,
-    paid_date: this.paid_date ? this.paid_date.toISOString() : null,
-    accreditation_date: this.accreditation_date ? this.accreditation_date.toISOString() : null,
-    last_update_date: this.last_update_date ? this.last_update_date.toISOString() : null,
+    request_date: formatDateWithTimezone(this.request_date),
+    due_date: formatDateWithTimezone(this.due_date),
+    last_due_date: formatDateWithTimezone(this.last_due_date),
+    process_date: formatDateWithTimezone(this.process_date),
+    paid_date: formatDateWithTimezone(this.paid_date),
+    accreditation_date: formatDateWithTimezone(this.accreditation_date),
+    last_update_date: formatDateWithTimezone(this.last_update_date),
     metadata: this.metadata,
     source: this.source
   };
