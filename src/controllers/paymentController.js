@@ -700,7 +700,6 @@ exports.resendNotification = async (req, res) => {
     // Si se pasa una URL personalizada, actualizarla en el documento para que Lambda la lea
     if (notification_url !== undefined) {
       payment.notification_url = notification_url || null;
-      payment.last_update_date = new Date();
       await payment.save();
     }
 
