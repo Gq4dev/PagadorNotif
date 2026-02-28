@@ -117,6 +117,24 @@ export const resendNotification = async (transactionId, { notification_url, is_f
   return response.json()
 }
 
+export const updatePaymentStatus = async (transactionId, status, status_detail) => {
+  const body = { status }
+  if (status_detail) body.status_detail = status_detail
+
+  const response = await fetch(`${API_URL}/payments/${transactionId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.error || 'Error al actualizar el estado')
+  }
+
+  return response.json()
+}
+
 export const createBulkTestWithDuplicates = async () => {
   const response = await fetch(`${API_URL}/payments/bulk/test-duplicates`, {
     method: 'POST'

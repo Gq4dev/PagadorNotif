@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getPayments, resendNotification } from '../services/api'
+import { getPayments, resendNotification, updatePaymentStatus } from '../services/api'
 
 function ResendModal({ payment, onClose, onSuccess }) {
   const [notifUrl, setNotifUrl] = useState(payment.notification_url || '')
@@ -82,6 +82,81 @@ function ResendModal({ payment, onClose, onSuccess }) {
   )
 }
 
+const STATUSES = [
+  { value: 'approved', label: '✅ Aprobado' },
+  { value: 'rejected', label: '❌ Rechazado' },
+  { value: 'pending',  label: '⏳ En proceso' },
+  { value: 'refunded', label: '↩️ Reembolsado' },
+  { value: 'cancelled',label: '🚫 Cancelado' },
+]
+
+function ChangeStatusModal({ payment, onClose, onSuccess }) {
+  const [status, setStatus] = useState(payment.status)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await updatePaymentStatus(payment.external_transaction_id || payment.id, status)
+      setResult({ success: true, previous: res.previous_status, current: res.data.status })
+      onSuccess()
+    } catch (err) {
+      setResult({ success: false, message: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="result-overlay" onClick={onClose}>
+      <div className="resend-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="resend-modal-title">Cambiar Estado</h3>
+        <p className="resend-modal-id">
+          <code>{payment.external_transaction_id || payment.id}</code>
+        </p>
+
+        {result ? (
+          <div className={`resend-result ${result.success ? 'resend-result-ok' : 'resend-result-err'}`}>
+            {result.success
+              ? <span>✅ Estado cambiado: <strong>{result.previous}</strong> → <strong>{result.current}</strong></span>
+              : <span>❌ {result.message}</span>
+            }
+            <button className="btn btn-secondary" style={{ marginTop: '1rem', width: '100%' }} onClick={onClose}>
+              Cerrar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+              <label>Nuevo estado</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                style={{ width: '100%' }}
+              >
+                {STATUSES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading || status === payment.status}>
+                {loading ? 'Guardando...' : '💾 Guardar'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function PaymentList() {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -92,6 +167,7 @@ function PaymentList() {
     page: 1
   })
   const [resendTarget, setResendTarget] = useState(null)
+  const [changeStatusTarget, setChangeStatusTarget] = useState(null)
 
   useEffect(() => {
     fetchPayments()
@@ -234,13 +310,20 @@ function PaymentList() {
                         <span style={{ color: 'var(--warning)' }}>⏳ No</span>
                       )}
                     </td>
-                    <td>
+                    <td style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       <button
                         className="btn-resend"
                         onClick={() => setResendTarget(payment)}
                         title="Reenviar notificación"
                       >
                         🔁 Reenviar
+                      </button>
+                      <button
+                        className="btn-resend"
+                        onClick={() => setChangeStatusTarget(payment)}
+                        title="Cambiar estado"
+                      >
+                        ✏️ Estado
                       </button>
                     </td>
                   </tr>
@@ -275,6 +358,17 @@ function PaymentList() {
           payment={resendTarget}
           onClose={() => setResendTarget(null)}
           onSuccess={() => {
+            fetchPayments()
+          }}
+        />
+      )}
+
+      {changeStatusTarget && (
+        <ChangeStatusModal
+          payment={changeStatusTarget}
+          onClose={() => setChangeStatusTarget(null)}
+          onSuccess={() => {
+            setChangeStatusTarget(null)
             fetchPayments()
           }}
         />
