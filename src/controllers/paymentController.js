@@ -1002,6 +1002,94 @@ exports.createBulkTestPaymentsApproved = async (req, res) => {
   }
 };
 
+// Actualizar el estado de un pago (para testing)
+exports.updatePaymentStatus = async (req, res) => {
+  const VALID_STATUSES = ['pending', 'approved', 'rejected', 'refunded', 'cancelled'];
+
+  try {
+    const { transactionId } = req.params;
+    const { status, status_detail, notify = false } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere el campo status',
+        valid_statuses: VALID_STATUSES
+      });
+    }
+
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: `Estado inválido: "${status}"`,
+        valid_statuses: VALID_STATUSES
+      });
+    }
+
+    const payment = await Payment.findOne({
+      $or: [
+        { external_transaction_id: transactionId },
+        { id: transactionId },
+        { transactionId: transactionId }
+      ]
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pago no encontrado'
+      });
+    }
+
+    const previousStatus = payment.status;
+
+    const STATUS_DETAILS = {
+      approved: 'APROBADA - Autorizada - MOP GPAY: -1 - Aprobada',
+      rejected: 'RECHAZADA - Transacción rechazada',
+      pending: 'PENDIENTE - En proceso de validación',
+      refunded: 'REEMBOLSADO - Pago reembolsado',
+      cancelled: 'CANCELADO - Pago cancelado'
+    };
+
+    payment.status = status;
+    payment.status_detail = status_detail || STATUS_DETAILS[status];
+    payment.last_update_date = new Date();
+
+    if (status === 'approved') {
+      payment.process_date = payment.process_date || new Date();
+      payment.paid_date = payment.paid_date || new Date();
+      payment.accreditation_date = payment.accreditation_date || new Date();
+    } else if (status === 'rejected' || status === 'cancelled') {
+      payment.process_date = null;
+      payment.paid_date = null;
+      payment.accreditation_date = null;
+    }
+
+    await payment.save();
+
+    let notificationResult = null;
+    if (notify) {
+      notificationResult = await sendNotification(payment);
+      if (!notificationResult.success) {
+        console.warn(`No se pudo enviar notificación tras cambio de estado para pago ${payment.external_transaction_id}:`, notificationResult.error);
+      }
+    }
+
+    res.json({
+      success: true,
+      previous_status: previousStatus,
+      data: payment.toPaymentJSON(),
+      ...(notify && { notification: notificationResult })
+    });
+  } catch (error) {
+    console.error('Error al actualizar estado del pago:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al actualizar el estado del pago'
+    });
+  }
+};
+
 // Crear pagos con duplicados para testing
 exports.createBulkTestWithDuplicates = async (req, res) => {
   try {

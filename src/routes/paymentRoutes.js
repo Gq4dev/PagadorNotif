@@ -35,4 +35,7 @@ router.post('/:transactionId/resend-notification', paymentController.resendNotif
 // Reembolsar un pago
 router.post('/:transactionId/refund', paymentController.refundPayment);
 
+// Actualizar estado del pago (para testing)
+router.patch('/:transactionId/status', paymentController.updatePaymentStatus);
+
 module.exports = router;

@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(ls -la /c/Users/Guillote/Desktop/ESCRITORIO/PAGOTIC/NOTIFV2/PAGADOR/.env*)"
     ]
   }
 }
