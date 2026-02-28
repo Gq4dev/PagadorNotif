@@ -1,5 +1,86 @@
 import { useState, useEffect } from 'react'
-import { getPayments } from '../services/api'
+import { getPayments, resendNotification } from '../services/api'
+
+function ResendModal({ payment, onClose, onSuccess }) {
+  const [notifUrl, setNotifUrl] = useState(payment.notification_url || '')
+  const [isForce, setIsForce] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await resendNotification(
+        payment.external_transaction_id || payment.id,
+        { notification_url: notifUrl, is_force: isForce }
+      )
+      setResult({ success: true, message: res.message || 'Notificación reenviada' })
+      onSuccess()
+    } catch (err) {
+      setResult({ success: false, message: err.message })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="result-overlay" onClick={onClose}>
+      <div className="resend-modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="resend-modal-title">Reenviar Notificación</h3>
+        <p className="resend-modal-id">
+          <code>{payment.external_transaction_id || payment.id}</code>
+        </p>
+
+        {result ? (
+          <div className={`resend-result ${result.success ? 'resend-result-ok' : 'resend-result-err'}`}>
+            <span>{result.success ? '✅' : '❌'} {result.message}</span>
+            <button className="btn btn-secondary" style={{ marginTop: '1rem', width: '100%' }} onClick={onClose}>
+              Cerrar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label>URL de notificación</label>
+              <input
+                type="url"
+                value={notifUrl}
+                onChange={(e) => setNotifUrl(e.target.value)}
+                placeholder="https://..."
+                style={{ width: '100%' }}
+              />
+              <small style={{ color: 'var(--gray-500)' }}>
+                Dejá vacío para usar la URL original del pago
+              </small>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <input
+                type="checkbox"
+                id="isForce"
+                checked={isForce}
+                onChange={(e) => setIsForce(e.target.checked)}
+              />
+              <label htmlFor="isForce" style={{ fontSize: '0.875rem', color: 'var(--gray-700)', margin: 0 }}>
+                <strong>is_force = true</strong> (forzar reenvío ignorando deduplicación)
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
+                {loading ? 'Enviando...' : '🚀 Reenviar'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function PaymentList() {
   const [payments, setPayments] = useState([])
@@ -10,6 +91,7 @@ function PaymentList() {
     collectorId: '',
     page: 1
   })
+  const [resendTarget, setResendTarget] = useState(null)
 
   useEffect(() => {
     fetchPayments()
@@ -126,6 +208,7 @@ function PaymentList() {
                   <th>Monto</th>
                   <th>Estado</th>
                   <th>Notificado</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,6 +233,15 @@ function PaymentList() {
                       ) : (
                         <span style={{ color: 'var(--warning)' }}>⏳ No</span>
                       )}
+                    </td>
+                    <td>
+                      <button
+                        className="btn-resend"
+                        onClick={() => setResendTarget(payment)}
+                        title="Reenviar notificación"
+                      >
+                        🔁 Reenviar
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -176,6 +268,16 @@ function PaymentList() {
             </button>
           </div>
         </>
+      )}
+
+      {resendTarget && (
+        <ResendModal
+          payment={resendTarget}
+          onClose={() => setResendTarget(null)}
+          onSuccess={() => {
+            fetchPayments()
+          }}
+        />
       )}
     </div>
   )

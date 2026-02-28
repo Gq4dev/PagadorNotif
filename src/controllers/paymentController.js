@@ -676,6 +676,65 @@ exports.markMultipleAsNotified = async (req, res) => {
   }
 };
 
+// Reenviar notificación a SQS/Lambda (fuerza el reenvío)
+exports.resendNotification = async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { notification_url, is_force = true } = req.body;
+
+    const payment = await Payment.findOne({
+      $or: [
+        { external_transaction_id: transactionId },
+        { id: transactionId },
+        { transactionId: transactionId }
+      ]
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pago no encontrado'
+      });
+    }
+
+    // Si se pasa una URL personalizada, actualizarla en el documento para que Lambda la lea
+    if (notification_url !== undefined) {
+      payment.notification_url = notification_url || null;
+      payment.last_update_date = new Date();
+      await payment.save();
+    }
+
+    const customAttributes = {
+      allow_commerce_pan_token: payment.sqsAttributes?.allow_commerce_pan_token || 'true',
+      from_batch: 'false',
+      is_force: is_force ? 'true' : 'false'
+    };
+
+    const result = await sendNotificationWithCustomAttributes(payment, customAttributes);
+
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        error: result.error || 'Error al reenviar la notificación',
+        details: result.details
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notificación reenviada a SQS',
+      is_force,
+      notification_url: payment.notification_url
+    });
+  } catch (error) {
+    console.error('Error al reenviar notificación:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error al reenviar la notificación'
+    });
+  }
+};
+
 // Reembolsar un pago
 exports.refundPayment = async (req, res) => {
   try {

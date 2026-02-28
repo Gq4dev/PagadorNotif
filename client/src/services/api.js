@@ -102,6 +102,21 @@ export const createBulkTestPaymentsApproved = async (count = 50) => {
   return response.json()
 }
 
+export const resendNotification = async (transactionId, { notification_url, is_force = true } = {}) => {
+  const response = await fetch(`${API_URL}/payments/${transactionId}/resend-notification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notification_url, is_force })
+  })
+
+  if (!response.ok) {
+    const err = await response.json()
+    throw new Error(err.error || 'Error al reenviar la notificación')
+  }
+
+  return response.json()
+}
+
 export const createBulkTestWithDuplicates = async () => {
   const response = await fetch(`${API_URL}/payments/bulk/test-duplicates`, {
     method: 'POST'

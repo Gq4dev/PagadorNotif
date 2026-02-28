@@ -467,6 +467,71 @@ body {
   }
 }
 
+/* Resend button */
+.btn-resend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--primary-light);
+  background: transparent;
+  color: var(--primary);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-resend:hover {
+  background: var(--primary);
+  color: white;
+}
+
+/* Resend modal */
+.resend-modal {
+  background: white;
+  border-radius: var(--radius);
+  padding: 2rem;
+  width: 90%;
+  max-width: 460px;
+  animation: slideUp 0.3s ease;
+}
+
+.resend-modal-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin-bottom: 0.5rem;
+}
+
+.resend-modal-id {
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  margin-bottom: 1.5rem;
+}
+
+.resend-result {
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.resend-result-ok {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.resend-result-err {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
 /* Empty state */
 .empty-state {
   text-align: center;

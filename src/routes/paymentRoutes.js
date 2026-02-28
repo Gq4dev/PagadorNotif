@@ -29,6 +29,9 @@ router.patch('/:transactionId/notified', paymentController.markAsNotified);
 // Marcar múltiples pagos como notificados (bulk)
 router.patch('/bulk/notified', paymentController.markMultipleAsNotified);
 
+// Reenviar notificación (con is_force y URL opcional)
+router.post('/:transactionId/resend-notification', paymentController.resendNotification);
+
 // Reembolsar un pago
 router.post('/:transactionId/refund', paymentController.refundPayment);
 
