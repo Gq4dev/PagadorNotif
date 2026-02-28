@@ -1008,7 +1008,7 @@ exports.updatePaymentStatus = async (req, res) => {
 
   try {
     const { transactionId } = req.params;
-    const { status, status_detail, notify = false } = req.body;
+    const { status, status_detail } = req.body;
 
     if (!status) {
       return res.status(400).json({
@@ -1067,19 +1067,16 @@ exports.updatePaymentStatus = async (req, res) => {
 
     await payment.save();
 
-    let notificationResult = null;
-    if (notify) {
-      notificationResult = await sendNotification(payment);
-      if (!notificationResult.success) {
-        console.warn(`No se pudo enviar notificación tras cambio de estado para pago ${payment.external_transaction_id}:`, notificationResult.error);
-      }
+    const notificationResult = await sendNotification(payment);
+    if (!notificationResult.success) {
+      console.warn(`No se pudo enviar notificación tras cambio de estado para pago ${payment.external_transaction_id}:`, notificationResult.error);
     }
 
     res.json({
       success: true,
       previous_status: previousStatus,
       data: payment.toPaymentJSON(),
-      ...(notify && { notification: notificationResult })
+      notification: notificationResult
     });
   } catch (error) {
     console.error('Error al actualizar estado del pago:', error);
