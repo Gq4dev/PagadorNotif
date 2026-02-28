@@ -1053,7 +1053,9 @@ exports.updatePaymentStatus = async (req, res) => {
 
     payment.status = status;
     payment.status_detail = status_detail || STATUS_DETAILS[status];
-    payment.last_update_date = new Date();
+    if (status !== previousStatus) {
+      payment.last_update_date = new Date();
+    }
 
     if (status === 'approved') {
       payment.process_date = payment.process_date || new Date();
