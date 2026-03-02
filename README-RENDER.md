@@ -26,7 +26,7 @@
 **Variables de entorno:**
 ```
 NODE_ENV=production
-MONGODB_URI=mongodb+srv://user:password@api.ro8hhr9.mongodb.net/pagador?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://user:password@api.ro8hhr9.mongodb.net/api?retryWrites=true&w=majority
 AWS_SQS_QUEUE_URL=https://xihdqvazw6.execute-api.us-east-1.amazonaws.com/notifications
 PORT=10000
 ```
