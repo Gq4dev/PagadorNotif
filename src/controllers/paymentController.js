@@ -20,7 +20,7 @@ const generateFictitiousCommerceToken = () => {
   return `com_${uuidv4().replace(/-/g, '').substring(0, 20)}`;
 };
 
-// URL de la cola SQS (se usa para Lambda y SQS)
+// URL directa de la cola SQS
 const QUEUE_URL = process.env.AWS_SQS_QUEUE_URL;
 
 // Log de la URL configurada al iniciar
@@ -42,19 +42,19 @@ const sqsClient = QUEUE_URL ? new SQSClient({
   region: getRegionFromUrl(QUEUE_URL)
 }) : null;
 
-// Función para enviar mensaje a SQS con atributos
-const sendToSQS = async (payment) => {
+// Envía el _id del pago directamente a SQS y marca notificationSent
+const sendNotification = async (payment, customAttributes = null) => {
   if (!QUEUE_URL || !sqsClient) {
     console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a SQS');
     return { success: false, error: 'Queue URL no configurada' };
   }
 
   const paymentId = payment._id.toString();
-  
-  const sqsAttributes = payment.sqsAttributes || {
-    allow_commerce_pan_token: 'true',
-    from_batch: 'false',
-    is_force: 'false'
+
+  const attrs = {
+    allow_commerce_pan_token: customAttributes?.allow_commerce_pan_token || payment.sqsAttributes?.allow_commerce_pan_token || 'true',
+    from_batch: customAttributes?.from_batch || payment.sqsAttributes?.from_batch || 'false',
+    is_force: customAttributes?.is_force || payment.sqsAttributes?.is_force || 'false'
   };
 
   try {
@@ -62,23 +62,20 @@ const sendToSQS = async (payment) => {
       QueueUrl: QUEUE_URL,
       MessageBody: paymentId,
       MessageAttributes: {
-        allow_commerce_pan_token: {
-          DataType: 'String',
-          StringValue: sqsAttributes.allow_commerce_pan_token || 'true'
-        },
-        from_batch: {
-          DataType: 'String',
-          StringValue: sqsAttributes.from_batch || 'false'
-        },
-        is_force: {
-          DataType: 'String',
-          StringValue: sqsAttributes.is_force || 'false'
-        }
+        allow_commerce_pan_token: { DataType: 'String', StringValue: attrs.allow_commerce_pan_token },
+        from_batch:               { DataType: 'String', StringValue: attrs.from_batch },
+        is_force:                 { DataType: 'String', StringValue: attrs.is_force }
       }
     });
 
     const response = await sqsClient.send(command);
     console.log(`Mensaje enviado a SQS para pago ${paymentId}. MessageId: ${response.MessageId}`);
+
+    await Payment.findByIdAndUpdate(payment._id, {
+      notificationSent: true,
+      notificationSentAt: new Date()
+    });
+
     return { success: true, messageId: response.MessageId };
   } catch (error) {
     console.error(`Error al enviar mensaje a SQS para pago ${paymentId}:`, error.message);
@@ -86,226 +83,9 @@ const sendToSQS = async (payment) => {
   }
 };
 
-// Función para enviar notificación al servicio AWS Lambda
-const sendNotification = async (payment) => {
-  const paymentId = payment._id.toString();
-  
-  try {
-    if (!QUEUE_URL) {
-      console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a Lambda');
-      return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
-    }
-
-    const sqsAttributes = payment.sqsAttributes || {
-      allow_commerce_pan_token: 'true',
-      from_batch: 'false',
-      is_force: 'false'
-    };
-
-    // Obtener paymentMethod del primer método de pago (nueva estructura)
-    const firstPaymentMethod = payment.payment_methods && payment.payment_methods[0] ? payment.payment_methods[0] : {};
-    
-    const paymentMethodPayload = {
-      type: firstPaymentMethod.media_payment_detail || 'credit_card',
-      brand: firstPaymentMethod.media_payment_detail || null,
-      lastFourDigits: firstPaymentMethod.last_four_digits || null,
-      token: firstPaymentMethod.token || null,
-      tokenId: firstPaymentMethod.tokenId || null,
-      panToken: firstPaymentMethod.panToken || null,
-      commerceToken: firstPaymentMethod.commerceToken || null
-    };
-
-    // Payload exacto para AWS: QueueUrl, MessageBody, MessageAttributes, paymentMethod
-    const payload = {
-      QueueUrl: QUEUE_URL,
-      MessageBody: paymentId,
-      paymentMethod: paymentMethodPayload,
-      MessageAttributes: {
-        allow_commerce_pan_token: {
-          DataType: 'String',
-          StringValue: sqsAttributes.allow_commerce_pan_token || 'true'
-        },
-        from_batch: {
-          DataType: 'String',
-          StringValue: sqsAttributes.from_batch || 'false'
-        },
-        is_force: {
-          DataType: 'String',
-          StringValue: sqsAttributes.is_force || 'false'
-        }
-      }
-    };
-
-    console.log(`Enviando notificación para pago ${payment.external_transaction_id}...`);
-    console.log(`URL destino: ${QUEUE_URL}`);
-    console.log(`Payload:`, JSON.stringify(payload, null, 2));
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const lambdaResponse = await fetch(QUEUE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (lambdaResponse.ok) {
-        await Payment.findByIdAndUpdate(payment._id, {
-          notificationSent: true,
-          notificationSentAt: new Date()
-        });
-        console.log(`Notificación enviada exitosamente para pago ${payment.external_transaction_id}`);
-        return { success: true };
-      } else {
-        const errorText = await lambdaResponse.text();
-        console.error(`Error al enviar notificación a Lambda: ${lambdaResponse.status} - ${errorText}`);
-        return { success: false, error: errorText, status: lambdaResponse.status };
-      }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      throw fetchError;
-    }
-  } catch (error) {
-    let errorMessage = error.message;
-    let errorDetails = {};
-
-    if (error.name === 'AbortError') {
-      errorMessage = 'Timeout: La solicitud tardó más de 30 segundos';
-      errorDetails = { type: 'timeout', url: QUEUE_URL };
-    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      errorMessage = `Error de conexión: No se pudo conectar a ${QUEUE_URL}. Verifica que la URL sea correcta y accesible.`;
-      errorDetails = { type: 'connection', code: error.code, url: QUEUE_URL };
-    } else if (error.code === 'ECONNRESET') {
-      errorMessage = 'Error: La conexión fue cerrada por el servidor';
-      errorDetails = { type: 'connection_reset', code: error.code };
-    } else if (error.message.includes('fetch failed')) {
-      errorMessage = `Error de red: ${error.message}. URL: ${QUEUE_URL}`;
-      errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
-    }
-
-    console.error(`Error al enviar notificación para pago ${payment.external_transaction_id}:`, errorMessage);
-    console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
-    
-    return { 
-      success: false, 
-      error: errorMessage,
-      details: errorDetails
-    };
-  }
-};
-
-// Función auxiliar para enviar notificación con atributos personalizados
-const sendNotificationWithCustomAttributes = async (payment, customAttributes) => {
-  const paymentId = payment._id.toString();
-  
-  try {
-    if (!QUEUE_URL) {
-      console.warn('AWS_SQS_QUEUE_URL no configurada, omitiendo envío a Lambda');
-      return { success: false, error: 'AWS_SQS_QUEUE_URL no configurada' };
-    }
-
-    const sqsAttributes = {
-      allow_commerce_pan_token: customAttributes?.allow_commerce_pan_token || payment.sqsAttributes?.allow_commerce_pan_token || 'true',
-      from_batch: customAttributes?.from_batch || payment.sqsAttributes?.from_batch || 'false',
-      is_force: customAttributes?.is_force || payment.sqsAttributes?.is_force || 'false'
-    };
-
-    const firstPaymentMethod = payment.payment_methods && payment.payment_methods[0] ? payment.payment_methods[0] : {};
-    
-    const paymentMethodPayload = {
-      type: firstPaymentMethod.media_payment_detail || 'credit_card',
-      brand: firstPaymentMethod.media_payment_detail || null,
-      lastFourDigits: firstPaymentMethod.last_four_digits || null,
-      token: firstPaymentMethod.token || null,
-      tokenId: firstPaymentMethod.tokenId || null,
-      panToken: firstPaymentMethod.panToken || null,
-      commerceToken: firstPaymentMethod.commerceToken || null
-    };
-
-    const payload = {
-      QueueUrl: QUEUE_URL,
-      MessageBody: paymentId,
-      paymentMethod: paymentMethodPayload,
-      MessageAttributes: {
-        allow_commerce_pan_token: {
-          DataType: 'String',
-          StringValue: sqsAttributes.allow_commerce_pan_token
-        },
-        from_batch: {
-          DataType: 'String',
-          StringValue: sqsAttributes.from_batch
-        },
-        is_force: {
-          DataType: 'String',
-          StringValue: sqsAttributes.is_force
-        }
-      }
-    };
-
-    console.log(`Enviando notificación con atributos personalizados para pago ${payment.external_transaction_id}...`);
-    console.log(`URL destino: ${QUEUE_URL}`);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const lambdaResponse = await fetch(QUEUE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (lambdaResponse.ok) {
-        console.log(`Notificación con atributos personalizados enviada exitosamente para pago ${payment.external_transaction_id}`);
-        return { success: true };
-      } else {
-        const errorText = await lambdaResponse.text();
-        console.error(`Error al enviar notificación: ${lambdaResponse.status} - ${errorText}`);
-        return { success: false, error: errorText, status: lambdaResponse.status };
-      }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      throw fetchError;
-    }
-  } catch (error) {
-    let errorMessage = error.message;
-    let errorDetails = {};
-
-    if (error.name === 'AbortError') {
-      errorMessage = 'Timeout: La solicitud tardó más de 30 segundos';
-      errorDetails = { type: 'timeout', url: QUEUE_URL };
-    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      errorMessage = `Error de conexión: No se pudo conectar a ${QUEUE_URL}. Verifica que la URL sea correcta y accesible.`;
-      errorDetails = { type: 'connection', code: error.code, url: QUEUE_URL };
-    } else if (error.code === 'ECONNRESET') {
-      errorMessage = 'Error: La conexión fue cerrada por el servidor';
-      errorDetails = { type: 'connection_reset', code: error.code };
-    } else if (error.message.includes('fetch failed')) {
-      errorMessage = `Error de red: ${error.message}. URL: ${QUEUE_URL}`;
-      errorDetails = { type: 'network', message: error.message, url: QUEUE_URL };
-    }
-
-    console.error(`Error al enviar notificación para pago ${payment.external_transaction_id}:`, errorMessage);
-    console.error(`Detalles del error:`, { ...errorDetails, originalError: error.message, stack: error.stack });
-    
-    return { 
-      success: false, 
-      error: errorMessage,
-      details: errorDetails
-    };
-  }
-};
+// Alias para reenvíos con atributos personalizados
+const sendNotificationWithCustomAttributes = (payment, customAttributes) =>
+  sendNotification(payment, customAttributes);
 
 // Simular procesamiento de pago (genera resultado aleatorio o basado en reglas)
 const simulatePaymentProcessing = (amount, paymentMethod) => {
@@ -468,12 +248,10 @@ exports.createPayment = async (req, res) => {
     const payment = new Payment(paymentData);
     await payment.save();
 
-    // Enviar notificación a AWS para todos los estados
-    const notificationResult = await sendNotification(payment);
-    
-    if (!notificationResult.success) {
-      console.warn(`No se pudo enviar notificación para pago ${payment.external_transaction_id}:`, notificationResult.error);
-    }
+    // Enviar notificación a AWS sin bloquear la respuesta
+    sendNotification(payment).catch(err =>
+      console.warn(`No se pudo enviar notificación para pago ${payment.external_transaction_id}:`, err.message)
+    );
 
     res.status(201).json({
       success: true,

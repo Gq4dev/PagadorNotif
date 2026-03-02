@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version)",
+      "Bash(npm run dev)",
+      "Bash(netstat -ano)",
+      "Read(//c/Users/Guillote/Desktop/ESCRITORIO/PAGOTIC/NOTIFV2/PAGADOR/**)",
+      "Bash(xargs -I{} taskkill /PID {} /F)",
+      "Bash(findstr :3000)",
+      "Bash(taskkill /PID 21168 /F)",
+      "Bash(cmd /c \"taskkill /PID 21168 /F\")",
+      "Bash(cmd /c \"taskkill /IM node.exe /F\")",
+      "Bash(cmd /c \"netstat -ano | findstr :3000\")",
+      "Bash(cmd /c \"wmic process where \"\"name=''node.exe''\"\" get ProcessId,CommandLine 2>&1\")",
+      "Bash(cmd /c \"tasklist | findstr node\")",
+      "Bash(ls -la .env*)"
+    ]
+  }
+}
