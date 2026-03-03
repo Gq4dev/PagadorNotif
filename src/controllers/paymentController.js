@@ -458,7 +458,7 @@ exports.markMultipleAsNotified = async (req, res) => {
 exports.resendNotification = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    const { notification_url, is_force = true } = req.body;
+    const { notification_url, is_force = true, status, status_detail } = req.body;
 
     const payment = await Payment.findOne({
       $or: [
@@ -475,9 +475,24 @@ exports.resendNotification = async (req, res) => {
       });
     }
 
+    const previousStatus = payment.status;
+    let dirty = false;
+
     // Si se pasa una URL personalizada, actualizarla en el documento para que Lambda la lea
     if (notification_url !== undefined) {
       payment.notification_url = notification_url || null;
+      dirty = true;
+    }
+
+    // Solo actualizar last_update_date si el estado cambia
+    if (status && status !== previousStatus) {
+      payment.status = status;
+      if (status_detail !== undefined) payment.status_detail = status_detail;
+      payment.last_update_date = new Date();
+      dirty = true;
+    }
+
+    if (dirty) {
       await payment.save();
     }
 
@@ -501,7 +516,9 @@ exports.resendNotification = async (req, res) => {
       success: true,
       message: 'Notificación reenviada a SQS',
       is_force,
-      notification_url: payment.notification_url
+      notification_url: payment.notification_url,
+      status: payment.status,
+      previous_status: previousStatus
     });
   } catch (error) {
     console.error('Error al reenviar notificación:', error);
